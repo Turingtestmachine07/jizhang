@@ -2,6 +2,8 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { productApi } from '../api'
+import QRCode from 'qrcode'
+import axios from 'axios'
 
 const loading = ref(false)
 const products = ref([])
@@ -12,6 +14,7 @@ const detailVisible = ref(false)
 const currentProduct = ref(null)
 const productStats = ref(null)
 const productOrders = ref([])
+const selectedProducts = ref([]) // 批量选中的产品
 
 // 筛选条件
 const filters = ref({
@@ -39,6 +42,18 @@ const rules = {
 // 图片预览
 const imageUrl = ref('')
 const fileList = ref([])
+
+// 将相对路径转换为完整URL（用于显示）
+const getImageUrl = (photoPath) => {
+  if (!photoPath) return ''
+  if (photoPath.startsWith('http')) return photoPath
+  if (photoPath.startsWith('/uploads/')) {
+    // 开发环境下使用后端服务器地址
+    const backendUrl = import.meta.env.DEV ? 'http://localhost:3000' : window.location.origin
+    return `${backendUrl}${photoPath}`
+  }
+  return photoPath
+}
 
 // 获取产品列表
 const fetchProducts = async () => {
@@ -85,8 +100,8 @@ const handleAdd = () => {
 const handleEdit = (row) => {
   dialogTitle.value = '编辑产品'
   form.value = { ...row }
-  imageUrl.value = row.photo || ''
-  fileList.value = row.photo ? [{ url: row.photo }] : []
+  imageUrl.value = getImageUrl(row.photo)
+  fileList.value = row.photo ? [{ url: getImageUrl(row.photo) }] : []
   dialogVisible.value = true
 }
 
@@ -122,6 +137,78 @@ const handleDelete = async (row) => {
   }
 }
 
+// 表格选择变化
+const handleSelectionChange = (selection) => {
+  selectedProducts.value = selection
+}
+
+// 批量删除
+const handleBatchDelete = async () => {
+  if (selectedProducts.value.length === 0) {
+    ElMessage.warning('请先选择要删除的产品')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedProducts.value.length} 个产品吗？`,
+      '批量删除',
+      { type: 'warning' }
+    )
+
+    // 并发删除所有选中的产品
+    await Promise.all(
+      selectedProducts.value.map(product => productApi.delete(product.id))
+    )
+
+    ElMessage.success(`成功删除 ${selectedProducts.value.length} 个产品`)
+    selectedProducts.value = []
+    fetchProducts()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('批量删除失败')
+    }
+  }
+}
+
+// 批量导出
+const handleBatchExport = () => {
+  if (selectedProducts.value.length === 0) {
+    ElMessage.warning('请先选择要导出的产品')
+    return
+  }
+
+  try {
+    // 准备导出数据
+    const exportData = selectedProducts.value.map(product => ({
+      '产品名称': product.name,
+      '分类': product.category || '-',
+      '规格': product.spec || '-',
+      '单位': product.unit || '-',
+      '单价': product.unit_price,
+      '描述': product.description || '-'
+    }))
+
+    // 转换为CSV格式
+    const headers = Object.keys(exportData[0])
+    const csvContent = [
+      headers.join(','),
+      ...exportData.map(row => headers.map(header => `"${row[header]}"`).join(','))
+    ].join('\n')
+
+    // 创建下载链接
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `产品列表_${new Date().toLocaleDateString()}.csv`
+    link.click()
+
+    ElMessage.success(`成功导出 ${selectedProducts.value.length} 个产品`)
+  } catch (error) {
+    ElMessage.error('导出失败')
+  }
+}
+
 // 图片上传前检查
 const beforeUpload = (file) => {
   const isImage = file.type.startsWith('image/')
@@ -150,10 +237,107 @@ const handleImageRemove = () => {
   imageUrl.value = ''
 }
 
+// 扫码上传相关
+const qrDialogVisible = ref(false)
+const qrCodeUrl = ref('')
+const uploadSessionId = ref(null)
+const pollingTimer = ref(null)
+
+// 开始扫码上传
+const startQRUpload = async () => {
+  try {
+    // 创建上传会话
+    const { data } = await axios.post('/api/upload-session')
+    uploadSessionId.value = data.sessionId
+
+    // 获取外部访问地址配置
+    const { data: configData } = await axios.get('/api/config/external-url')
+
+    let baseUrl
+    if (configData.externalUrl) {
+      // 如果配置了完整的外部URL，直接使用
+      baseUrl = configData.externalUrl
+    } else if (configData.ip) {
+      // 如果只返回了IP，使用当前访问的协议和端口
+      const protocol = window.location.protocol
+      const port = window.location.port
+      baseUrl = `${protocol}//${configData.ip}${port ? ':' + port : ''}`
+    } else {
+      // 兜底：使用当前浏览器访问的完整地址
+      baseUrl = `${window.location.protocol}//${window.location.host}`
+    }
+
+    const uploadUrl = `${baseUrl}/mobile-upload/${data.sessionId}`
+
+    // 生成二维码
+    qrCodeUrl.value = await QRCode.toDataURL(uploadUrl, {
+      width: 300,
+      margin: 2
+    })
+
+    qrDialogVisible.value = true
+
+    // 开始轮询检查上传状态
+    startPolling()
+  } catch (error) {
+    ElMessage.error('创建上传会话失败')
+  }
+}
+
+// 开始轮询
+const startPolling = () => {
+  pollingTimer.value = setInterval(async () => {
+    try {
+      const { data } = await axios.get(`/api/upload-session/${uploadSessionId.value}`)
+
+      if (data.hasUpload && data.uploadedFile) {
+        // 停止轮询
+        stopPolling()
+
+        // 设置图片
+        const uploadedUrl = data.uploadedFile.url
+        imageUrl.value = getImageUrl(uploadedUrl)
+        form.value.photo = uploadedUrl // 保存相对路径
+
+        // 关闭对话框
+        qrDialogVisible.value = false
+
+        ElMessage.success('图片已接收')
+
+        // 清理会话
+        await axios.delete(`/api/upload-session/${uploadSessionId.value}`)
+      }
+    } catch (error) {
+      console.error('轮询失败:', error)
+    }
+  }, 2000) // 每2秒检查一次
+}
+
+// 停止轮询
+const stopPolling = () => {
+  if (pollingTimer.value) {
+    clearInterval(pollingTimer.value)
+    pollingTimer.value = null
+  }
+}
+
+// 关闭二维码对话框
+const closeQRDialog = () => {
+  stopPolling()
+  qrDialogVisible.value = false
+  if (uploadSessionId.value) {
+    axios.delete(`/api/upload-session/${uploadSessionId.value}`).catch(() => {})
+  }
+}
+
 // 提交表单
 const handleSubmit = async () => {
   try {
     await formRef.value.validate()
+
+    console.log('提交的表单数据:', form.value)
+    console.log('photo字段类型:', typeof form.value.photo)
+    console.log('photo字段值:', form.value.photo)
 
     if (form.value.id) {
       await productApi.update(form.value.id, form.value)
@@ -197,7 +381,7 @@ onMounted(() => {
           />
         </el-form-item>
         <el-form-item label="分类">
-          <el-select v-model="filters.category" placeholder="全部" clearable>
+          <el-select v-model="filters.category" placeholder="全部" clearable style="width: 150px">
             <el-option v-for="cat in categories" :key="cat" :label="cat" :value="cat" />
           </el-select>
         </el-form-item>
@@ -213,13 +397,33 @@ onMounted(() => {
           <el-button type="primary" @click="handleAdd">
             <el-icon><Plus /></el-icon> 新增产品
           </el-button>
+          <el-button
+            type="danger"
+            :disabled="selectedProducts.length === 0"
+            @click="handleBatchDelete"
+          >
+            <el-icon><Delete /></el-icon> 批量删除 ({{ selectedProducts.length }})
+          </el-button>
+          <el-button
+            type="success"
+            :disabled="selectedProducts.length === 0"
+            @click="handleBatchExport"
+          >
+            <el-icon><Download /></el-icon> 批量导出 ({{ selectedProducts.length }})
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <!-- 产品列表 -->
     <el-card shadow="never">
-      <el-table :data="products" v-loading="loading" style="width: 100%">
+      <el-table
+        :data="products"
+        v-loading="loading"
+        style="width: 100%"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="55" />
         <el-table-column label="图片" width="80">
           <template #default="{ row }">
             <el-image
@@ -276,20 +480,27 @@ onMounted(() => {
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="产品图片">
-          <el-upload
-            class="photo-uploader"
-            :show-file-list="false"
-            :before-upload="beforeUpload"
-            :on-change="handleImageChange"
-            :auto-upload="false"
-            accept="image/*"
-          >
-            <img v-if="imageUrl" :src="imageUrl" class="photo-preview" />
-            <el-icon v-else class="photo-uploader-icon"><Plus /></el-icon>
-          </el-upload>
-          <el-button v-if="imageUrl" text type="danger" @click="handleImageRemove">
-            移除图片
-          </el-button>
+          <div class="upload-area">
+            <el-upload
+              class="photo-uploader"
+              :show-file-list="false"
+              :before-upload="beforeUpload"
+              :on-change="handleImageChange"
+              :auto-upload="false"
+              accept="image/*"
+            >
+              <img v-if="imageUrl" :src="imageUrl" class="photo-preview" />
+              <el-icon v-else class="photo-uploader-icon"><Plus /></el-icon>
+            </el-upload>
+            <div class="upload-buttons">
+              <el-button v-if="imageUrl" text type="danger" @click="handleImageRemove">
+                移除图片
+              </el-button>
+              <el-button type="primary" text @click="startQRUpload">
+                <el-icon><QrCode /></el-icon> 扫码上传
+              </el-button>
+            </div>
+          </div>
         </el-form-item>
         <el-form-item label="产品名称" prop="name">
           <el-input v-model="form.name" placeholder="请输入产品名称" />
@@ -360,6 +571,22 @@ onMounted(() => {
         </el-table>
       </template>
     </el-drawer>
+
+    <!-- 扫码上传对话框 -->
+    <el-dialog
+      v-model="qrDialogVisible"
+      title="扫码上传图片"
+      width="400px"
+      @close="closeQRDialog"
+    >
+      <div class="qr-upload-dialog">
+        <p class="qr-tip">请使用手机扫描二维码上传图片</p>
+        <div class="qr-code-container">
+          <img v-if="qrCodeUrl" :src="qrCodeUrl" alt="二维码" class="qr-code" />
+        </div>
+        <p class="qr-hint">上传后图片将自动显示在表单中</p>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -419,6 +646,48 @@ onMounted(() => {
   width: 120px;
   height: 120px;
   object-fit: cover;
+}
+
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upload-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.qr-upload-dialog {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.qr-tip {
+  font-size: 16px;
+  color: var(--el-text-color-regular);
+  margin-bottom: 20px;
+}
+
+.qr-code-container {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.qr-code {
+  width: 300px;
+  height: 300px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+}
+
+.qr-hint {
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
+  margin-top: 20px;
 }
 </style>
 

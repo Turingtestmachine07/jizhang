@@ -240,6 +240,52 @@ router.delete('/:id', (req, res) => {
   }
 });
 
+// 批量删除订单
+router.post('/batch/delete', (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: '请提供要删除的订单ID列表' });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    const result = db.prepare(`DELETE FROM orders WHERE id IN (${placeholders})`).run(...ids);
+
+    res.json({
+      message: '批量删除成功',
+      deletedCount: result.changes
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 批量更新订单状态
+router.post('/batch/status', (req, res) => {
+  try {
+    const { ids, status } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: '请提供要更新的订单ID列表' });
+    }
+
+    if (!status) {
+      return res.status(400).json({ error: '请提供要更新的状态' });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    const result = db.prepare(`UPDATE orders SET status = ? WHERE id IN (${placeholders})`).run(status, ...ids);
+
+    res.json({
+      message: '批量更新成功',
+      updatedCount: result.changes
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 导出订单到Excel
 router.get('/export/excel', async (req, res) => {
   try {

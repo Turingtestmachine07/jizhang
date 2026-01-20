@@ -91,7 +91,7 @@ npm run dev
 
 3. 访问应用
 
-- 前端: http://localhost:5173
+- 前端: http://localhost:8888
 - 后端API: http://localhost:3000
 
 ## 项目结构

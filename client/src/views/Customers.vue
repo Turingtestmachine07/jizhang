@@ -11,6 +11,7 @@ const detailVisible = ref(false)
 const currentCustomer = ref(null)
 const customerStats = ref(null)
 const customerOrders = ref([])
+const selectedCustomers = ref([])
 
 // 筛选条件
 const filters = ref({
@@ -117,6 +118,37 @@ const handleDelete = async (row) => {
   }
 }
 
+// 批量删除客户
+const handleBatchDelete = async () => {
+  if (selectedCustomers.value.length === 0) {
+    ElMessage.warning('请选择要删除的客户')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedCustomers.value.length} 个客户吗？`,
+      '批量删除',
+      { type: 'warning' }
+    )
+
+    const ids = selectedCustomers.value.map(c => c.id)
+    await customerApi.batchDelete(ids)
+    ElMessage.success('批量删除成功')
+    selectedCustomers.value = []
+    fetchCustomers()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('批量删除失败')
+    }
+  }
+}
+
+// 处理选择变化
+const handleSelectionChange = (selection) => {
+  selectedCustomers.value = selection
+}
+
 // 提交表单
 const handleSubmit = async () => {
   try {
@@ -183,13 +215,26 @@ onMounted(() => {
           <el-button type="primary" @click="handleAdd">
             <el-icon><Plus /></el-icon> 新增客户
           </el-button>
+          <el-button
+            type="danger"
+            :disabled="selectedCustomers.length === 0"
+            @click="handleBatchDelete"
+          >
+            <el-icon><Delete /></el-icon> 批量删除
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <!-- 客户列表 -->
     <el-card shadow="never">
-      <el-table :data="customers" v-loading="loading" style="width: 100%">
+      <el-table
+        :data="customers"
+        v-loading="loading"
+        style="width: 100%"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="55" />
         <el-table-column prop="name" label="客户名称" min-width="120" />
         <el-table-column prop="phone" label="联系电话" width="140">
           <template #default="{ row }">

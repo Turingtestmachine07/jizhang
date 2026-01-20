@@ -1,5 +1,7 @@
 import express from 'express';
 import multer from 'multer';
+import sharp from 'sharp';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
@@ -22,16 +24,52 @@ const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const allowedTypes = /jpeg|jpg|png|gif|webp|heic|heif/;
     const ext = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mime = allowedTypes.test(file.mimetype);
+    const mime = allowedTypes.test(file.mimetype) || file.mimetype === 'image/heic' || file.mimetype === 'image/heif';
     if (ext && mime) {
       cb(null, true);
     } else {
-      cb(new Error('只支持图片格式 (jpeg, jpg, png, gif, webp)'));
+      cb(new Error('只支持图片格式 (jpeg, jpg, png, gif, webp, heic, heif)'));
     }
   }
 });
+
+// 图片处理中间件：转换为WebP格式并限制尺寸
+const processImage = async (req, res, next) => {
+  if (!req.file) return next();
+
+  try {
+    const inputPath = req.file.path;
+    const outputFilename = req.file.filename.replace(/\.[^.]+$/, '.webp');
+    const outputPath = path.join(__dirname, '../../uploads', outputFilename);
+
+    // 处理图片：转WebP + 限制尺寸到2000px
+    await sharp(inputPath)
+      .rotate() // 自动根据EXIF信息旋转图片
+      .resize(2000, 2000, {
+        fit: 'inside',
+        withoutEnlargement: true
+      })
+      .webp({ quality: 85 })
+      .toFile(outputPath);
+
+    // 删除原文件
+    fs.unlinkSync(inputPath);
+
+    // 更新 req.file 信息
+    req.file.filename = outputFilename;
+    req.file.path = outputPath;
+
+    next();
+  } catch (error) {
+    // 如果处理失败，删除上传的文件
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    next(error);
+  }
+};
 
 // 获取所有产品
 router.get('/', (req, res) => {
@@ -140,10 +178,14 @@ router.get('/:id/stats', (req, res) => {
 });
 
 // 创建产品
-router.post('/', upload.single('photo'), (req, res) => {
+router.post('/', upload.single('photo'), processImage, (req, res) => {
   try {
     const { name, category, spec, unit, unit_price, description } = req.body;
-    const photo = req.file ? `/uploads/${req.file.filename}` : null;
+    const photo = req.file ? `/uploads/${req.file.filename}` : (req.body.photo || null);
+
+    console.log('创建产品 - req.file:', req.file);
+    console.log('创建产品 - req.body.photo:', req.body.photo);
+    console.log('创建产品 - 最终photo值:', photo);
 
     const result = db.prepare(`
       INSERT INTO products (name, category, spec, unit, unit_price, photo, description)
@@ -158,10 +200,14 @@ router.post('/', upload.single('photo'), (req, res) => {
 });
 
 // 更新产品
-router.put('/:id', upload.single('photo'), (req, res) => {
+router.put('/:id', upload.single('photo'), processImage, (req, res) => {
   try {
     const { name, category, spec, unit, unit_price, description } = req.body;
     const photo = req.file ? `/uploads/${req.file.filename}` : req.body.photo;
+
+    console.log('更新产品 - req.file:', req.file);
+    console.log('更新产品 - req.body.photo:', req.body.photo);
+    console.log('更新产品 - 最终photo值:', photo);
 
     db.prepare(`
       UPDATE products

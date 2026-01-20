@@ -52,6 +52,12 @@ const routes = [
     name: 'Settings',
     component: () => import('../views/Settings.vue'),
     meta: { title: '系统设置' }
+  },
+  {
+    path: '/mobile-upload/:sessionId',
+    name: 'MobileUpload',
+    component: () => import('../views/MobileUpload.vue'),
+    meta: { title: '上传图片' }
   }
 ]
 

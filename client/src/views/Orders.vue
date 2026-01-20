@@ -14,6 +14,7 @@ const currentOrder = ref(null)
 const paymentVisible = ref(false)
 const paymentAmount = ref(0)
 const paymentOrderId = ref(null)
+const selectedOrders = ref([])
 
 // 快速新建客户弹窗
 const quickCustomerVisible = ref(false)
@@ -187,6 +188,63 @@ const handleDelete = async (row) => {
       ElMessage.error('删除失败')
     }
   }
+}
+
+// 批量删除订单
+const handleBatchDelete = async () => {
+  if (selectedOrders.value.length === 0) {
+    ElMessage.warning('请选择要删除的订单')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedOrders.value.length} 个订单吗？`,
+      '批量删除',
+      { type: 'warning' }
+    )
+
+    const ids = selectedOrders.value.map(o => o.id)
+    await orderApi.batchDelete(ids)
+    ElMessage.success('批量删除成功')
+    selectedOrders.value = []
+    fetchOrders()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('批量删除失败')
+    }
+  }
+}
+
+// 批量更新订单状态
+const handleBatchStatusUpdate = async (status) => {
+  if (selectedOrders.value.length === 0) {
+    ElMessage.warning('请选择要更新的订单')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要将选中的 ${selectedOrders.value.length} 个订单状态更新为"${status}"吗？`,
+      '批量更新状态',
+      { type: 'warning' }
+    )
+
+    const ids = selectedOrders.value.map(o => o.id)
+    await orderApi.batchUpdateStatus(ids, status)
+    ElMessage.success('批量更新成功')
+    selectedOrders.value = []
+    fetchOrders()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('批量更新失败')
+    }
+  }
+}
+
+// 处理选择变化
+const handleSelectionChange = (selection) => {
+  selectedOrders.value = selection
 }
 
 // 更新订单状态
@@ -436,11 +494,43 @@ onMounted(() => {
           </el-button>
         </el-form-item>
       </el-form>
+
+      <!-- 批量操作栏 -->
+      <div v-if="selectedOrders.length > 0" class="batch-actions">
+        <span class="batch-info">已选择 {{ selectedOrders.length }} 项</span>
+        <el-button-group>
+          <el-button size="small" @click="handleBatchStatusUpdate('待付款')">
+            标记为待付款
+          </el-button>
+          <el-button size="small" @click="handleBatchStatusUpdate('已付款')">
+            标记为已付款
+          </el-button>
+          <el-button size="small" @click="handleBatchStatusUpdate('已完成')">
+            标记为已完成
+          </el-button>
+          <el-button size="small" @click="handleBatchStatusUpdate('已取消')">
+            标记为已取消
+          </el-button>
+        </el-button-group>
+        <el-button
+          type="danger"
+          size="small"
+          @click="handleBatchDelete"
+        >
+          <el-icon><Delete /></el-icon> 批量删除
+        </el-button>
+      </div>
     </el-card>
 
     <!-- 订单列表 -->
     <el-card shadow="never">
-      <el-table :data="orders" v-loading="loading" style="width: 100%">
+      <el-table
+        :data="orders"
+        v-loading="loading"
+        style="width: 100%"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="55" />
         <el-table-column prop="order_no" label="订单编号" min-width="140" />
         <el-table-column prop="customer_name" label="客户" min-width="80">
           <template #default="{ row }">
@@ -769,6 +859,22 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   width: 100%;
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+}
+
+.batch-info {
+  font-size: 14px;
+  color: var(--el-text-color-regular);
+  margin-right: auto;
 }
 
 /* 移动端隐藏次要列 */

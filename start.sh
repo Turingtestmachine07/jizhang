@@ -51,14 +51,14 @@ sleep 3
 echo ""
 echo "🌐 正在打开浏览器..."
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    open http://localhost:5173
+    open http://localhost:8888
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    xdg-open http://localhost:5173
+    xdg-open http://localhost:8888
 fi
 
 echo ""
 echo "✅ 系统已启动!"
-echo "   前端地址: http://localhost:5173"
+echo "   前端地址: http://localhost:8888"
 echo "   后端地址: http://localhost:3000"
 echo ""
 echo "按 Ctrl+C 停止所有服务"

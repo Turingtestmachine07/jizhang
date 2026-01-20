@@ -66,15 +66,15 @@ for /f "tokens=* delims= " %%a in ("%LOCAL_IP%") do set LOCAL_IP=%%a
 :: 打开浏览器
 echo.
 echo 🌐 正在打开浏览器...
-start http://localhost:5173
+start http://localhost:8888
 
 echo.
 echo ✅ 系统已启动成功！
 echo.
 echo 📍 访问地址:
-echo    本地访问: http://localhost:5173
+echo    本地访问: http://localhost:8888
 if defined LOCAL_IP (
-    echo    内网访问: http://%LOCAL_IP%:5173
+    echo    内网访问: http://%LOCAL_IP%:8888
     echo.
     echo 💡 提示: 同一局域网内的其他设备可使用内网地址访问
 )

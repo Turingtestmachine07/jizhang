@@ -2,11 +2,43 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useThemeStore } from '../stores/theme'
-import { backupApi } from '../api'
+import { backupApi, imageCleanerApi } from '../api'
 
 const themeStore = useThemeStore()
 const loading = ref(false)
 const backups = ref([])
+const backupConfig = ref({
+  enabled: true,
+  retentionDays: 14
+})
+const configLoading = ref(false)
+
+// 图片清理相关
+const imageStats = ref(null)
+const cleaningImages = ref(false)
+
+// 获取自动备份配置
+const fetchBackupConfig = async () => {
+  try {
+    const { data } = await backupApi.getConfig()
+    backupConfig.value = data
+  } catch (error) {
+    ElMessage.error('获取自动备份配置失败')
+  }
+}
+
+// 保存自动备份配置
+const saveBackupConfig = async () => {
+  try {
+    configLoading.value = true
+    await backupApi.updateConfig(backupConfig.value)
+    ElMessage.success('配置已保存')
+  } catch (error) {
+    ElMessage.error('保存配置失败')
+  } finally {
+    configLoading.value = false
+  }
+}
 
 // 获取备份列表
 const fetchBackups = async () => {
@@ -83,8 +115,50 @@ const formatDate = (date) => {
   return new Date(date).toLocaleString('zh-CN')
 }
 
+// 判断是否为自动备份
+const isAutoBackup = (filename) => {
+  return filename.startsWith('jizhang_auto_')
+}
+
+// 获取图片清理统计
+const fetchImageStats = async () => {
+  try {
+    const { data } = await imageCleanerApi.getStats()
+    imageStats.value = data
+  } catch (error) {
+    ElMessage.error('获取图片统计失败')
+  }
+}
+
+// 清理未使用的图片
+const handleCleanImages = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `将删除 ${imageStats.value?.unusedImages || 0} 个未使用的图片，释放约 ${imageStats.value?.unusedSizeMB || 0} MB 空间。此操作不可恢复，确定继续吗？`,
+      '清理图片',
+      { type: 'warning' }
+    )
+
+    cleaningImages.value = true
+    const { data } = await imageCleanerApi.clean()
+
+    ElMessage.success(`清理完成：删除 ${data.deletedCount} 个文件，释放 ${data.deletedSizeMB} MB 空间`)
+
+    // 刷新统计
+    await fetchImageStats()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('清理失败')
+    }
+  } finally {
+    cleaningImages.value = false
+  }
+}
+
 onMounted(() => {
   fetchBackups()
+  fetchBackupConfig()
+  fetchImageStats()
 })
 </script>
 
@@ -120,6 +194,37 @@ onMounted(() => {
         </div>
       </template>
 
+      <!-- 自动备份配置 -->
+      <div class="backup-config">
+        <h4 class="config-title">自动备份设置</h4>
+        <el-form label-width="120px" :model="backupConfig">
+          <el-form-item label="启用自动备份">
+            <el-switch v-model="backupConfig.enabled" />
+            <span class="form-tip">每天首次启动时自动备份</span>
+          </el-form-item>
+          <el-form-item label="保留天数">
+            <el-input-number
+              v-model="backupConfig.retentionDays"
+              :min="1"
+              :max="365"
+              :disabled="!backupConfig.enabled"
+            />
+            <span class="form-tip">自动备份超过此天数将被删除（默认14天）</span>
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              type="primary"
+              @click="saveBackupConfig"
+              :loading="configLoading"
+            >
+              保存配置
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <el-divider />
+
       <div class="backup-actions">
         <el-button type="primary" @click="handleBackup">
           <el-icon><Plus /></el-icon> 创建备份
@@ -131,6 +236,12 @@ onMounted(() => {
 
       <el-table :data="backups" v-loading="loading" style="margin-top: 20px">
         <el-table-column prop="filename" label="文件名" min-width="280" />
+        <el-table-column label="类型" width="80">
+          <template #default="{ row }">
+            <el-tag v-if="isAutoBackup(row.filename)" type="info" size="small">自动</el-tag>
+            <el-tag v-else type="success" size="small">手动</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="size" label="大小" width="100">
           <template #default="{ row }">
             {{ formatSize(row.size) }}
@@ -157,6 +268,55 @@ onMounted(() => {
       </el-table>
 
       <el-empty v-if="!loading && backups.length === 0" description="暂无备份" />
+    </el-card>
+
+    <!-- 图片清理 -->
+    <el-card shadow="never" class="setting-card">
+      <template #header>
+        <div class="card-header">
+          <el-icon><Picture /></el-icon>
+          <span>图片清理</span>
+        </div>
+      </template>
+
+      <el-descriptions :column="2" border v-if="imageStats">
+        <el-descriptions-item label="总图片数">{{ imageStats.totalImages }}</el-descriptions-item>
+        <el-descriptions-item label="使用中">{{ imageStats.usedImages }}</el-descriptions-item>
+        <el-descriptions-item label="未使用">
+          <el-tag :type="imageStats.unusedImages > 0 ? 'warning' : 'success'">
+            {{ imageStats.unusedImages }}
+          </el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="可释放空间">
+          <el-tag :type="imageStats.unusedImages > 0 ? 'warning' : 'success'">
+            {{ imageStats.unusedSizeMB }} MB
+          </el-tag>
+        </el-descriptions-item>
+      </el-descriptions>
+
+      <div style="margin-top: 20px">
+        <el-button
+          type="danger"
+          :disabled="!imageStats || imageStats.unusedImages === 0"
+          :loading="cleaningImages"
+          @click="handleCleanImages"
+        >
+          <el-icon><Delete /></el-icon> 清理未使用图片
+        </el-button>
+        <el-button @click="fetchImageStats">
+          <el-icon><Refresh /></el-icon> 刷新统计
+        </el-button>
+      </div>
+
+      <el-alert
+        v-if="imageStats && imageStats.unusedImages > 0"
+        title="提示"
+        type="warning"
+        :closable="false"
+        style="margin-top: 20px"
+      >
+        检测到 {{ imageStats.unusedImages }} 个未使用的图片文件，建议定期清理以释放存储空间
+      </el-alert>
     </el-card>
 
     <!-- 关于 -->
@@ -205,6 +365,23 @@ onMounted(() => {
   font-size: 13px;
   color: var(--el-text-color-secondary);
   margin-top: 4px;
+}
+
+.backup-config {
+  margin-bottom: 20px;
+}
+
+.config-title {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--el-text-color-regular);
+}
+
+.form-tip {
+  margin-left: 12px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .backup-actions {

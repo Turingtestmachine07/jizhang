@@ -63,7 +63,8 @@ export const customerApi = {
   getStats: (id, params) => api.get(`/customers/${id}/stats`, { params }),
   create: (data) => api.post('/customers', data),
   update: (id, data) => api.put(`/customers/${id}`, data),
-  delete: (id) => api.delete(`/customers/${id}`)
+  delete: (id) => api.delete(`/customers/${id}`),
+  batchDelete: (ids) => api.post('/customers/batch/delete', { ids })
 }
 
 // 订单 API
@@ -75,6 +76,8 @@ export const orderApi = {
   updateStatus: (id, status) => api.patch(`/orders/${id}/status`, { status }),
   updatePayment: (id, paid_amount) => api.patch(`/orders/${id}/payment`, { paid_amount }),
   delete: (id) => api.delete(`/orders/${id}`),
+  batchDelete: (ids) => api.post('/orders/batch/delete', { ids }),
+  batchUpdateStatus: (ids, status) => api.post('/orders/batch/status', { ids, status }),
   exportExcel: (params) => api.get('/orders/export/excel', { params, responseType: 'blob' })
 }
 
@@ -109,7 +112,15 @@ export const backupApi = {
   create: () => api.post('/backup'),
   restore: (filename) => api.post(`/backup/restore/${filename}`),
   delete: (filename) => api.delete(`/backup/${filename}`),
-  download: (filename) => `/api/backup/download/${filename}`
+  download: (filename) => `/api/backup/download/${filename}`,
+  getConfig: () => api.get('/backup/config'),
+  updateConfig: (config) => api.put('/backup/config', config)
+}
+
+// 图片清理 API
+export const imageCleanerApi = {
+  getStats: () => api.get('/image-cleaner/stats'),
+  clean: () => api.post('/image-cleaner/clean')
 }
 
 export default api

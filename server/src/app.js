@@ -2,14 +2,19 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import os from 'os';
 
 import productRoutes from './routes/products.js';
 import customerRoutes from './routes/customers.js';
 import orderRoutes from './routes/orders.js';
 import statsRoutes from './routes/stats.js';
 import backupRoutes from './routes/backup.js';
+import backupConfigRoutes from './routes/backup-config.js';
+import uploadSessionRoutes from './routes/upload-session.js';
 import expenseRoutes from './routes/expenses.js';
+import imageCleanerRoutes from './routes/image-cleaner.js';
 import { errorHandler, notFoundHandler, requestLogger } from './middleware/errorHandler.js';
+import backupScheduler from './services/backup-scheduler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -38,11 +43,43 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/backup', backupRoutes);
+app.use('/api/backup/config', backupConfigRoutes);
+app.use('/api/upload-session', uploadSessionRoutes);
 app.use('/api/expenses', expenseRoutes);
+app.use('/api/image-cleaner', imageCleanerRoutes);
+
+// 获取本机内网IP地址
+function getLocalIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // 跳过内部（即127.0.0.1）和非IPv4地址
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
 
 // 健康检查
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: '服务运行正常' });
+});
+
+// 获取外部访问地址配置
+app.get('/api/config/external-url', (req, res) => {
+  // 如果配置了EXTERNAL_URL，直接使用
+  if (process.env.EXTERNAL_URL) {
+    return res.json({ externalUrl: process.env.EXTERNAL_URL });
+  }
+
+  // 否则返回本机IP，让前端自己决定端口
+  const localIP = getLocalIP();
+  res.json({
+    externalUrl: null,  // 没有配置完整URL
+    ip: localIP         // 只返回IP地址
+  });
 });
 
 // SPA 路由支持 - 所有非 API 请求返回 index.html
@@ -67,6 +104,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`服务器运行在 http://localhost:${PORT}`);
     console.log(`内网访问地址: http://<本机IP>:${PORT}`);
+
+    // 检查并执行每日备份
+    backupScheduler.checkAndBackup();
   });
 }
 

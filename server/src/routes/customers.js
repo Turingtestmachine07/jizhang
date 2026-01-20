@@ -149,4 +149,25 @@ router.delete('/:id', (req, res) => {
   }
 });
 
+// 批量删除客户
+router.post('/batch/delete', (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: '请提供要删除的客户ID列表' });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    const result = db.prepare(`DELETE FROM customers WHERE id IN (${placeholders})`).run(...ids);
+
+    res.json({
+      message: '批量删除成功',
+      deletedCount: result.changes
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
