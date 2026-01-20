@@ -13,6 +13,12 @@ if ! command -v node &> /dev/null; then
     exit 1
 fi
 
+# 检查文件夹存在
+if [ ! -d "server/data" ]; then
+    echo "   创建后端数据文件夹..."
+    mkdir -p server/data
+fi
+
 # 启动后端服务
 echo "📦 启动后端服务..."
 cd server
