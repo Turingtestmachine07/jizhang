@@ -1,6 +1,7 @@
 import express from 'express';
 import ExcelJS from 'exceljs';
 import db from '../database/index.js';
+import { getPaginationParams, createPaginatedResponse } from '../utils/pagination.js';
 
 const router = express.Router();
 
@@ -50,6 +51,8 @@ router.delete('/categories/:id', (req, res) => {
 router.get('/', (req, res) => {
   try {
     const { startDate, endDate, categoryId, keyword, paymentMethod } = req.query;
+    const { page, pageSize, offset } = getPaginationParams(req);
+
     let sql = `
       SELECT e.*, ec.name as category_name
       FROM expenses e
@@ -79,9 +82,15 @@ router.get('/', (req, res) => {
       params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
     }
 
-    sql += ' ORDER BY e.expense_date DESC, e.created_at DESC';
-    const expenses = db.prepare(sql).all(...params);
-    res.json(expenses);
+    // 获取总数
+    const countSql = sql.replace('SELECT e.*, ec.name as category_name', 'SELECT COUNT(*) as total');
+    const { total } = db.prepare(countSql).get(...params);
+
+    // 获取分页数据
+    sql += ' ORDER BY e.expense_date DESC, e.created_at DESC LIMIT ? OFFSET ?';
+    const expenses = db.prepare(sql).all(...params, pageSize, offset);
+
+    res.json(createPaginatedResponse(expenses, total, page, pageSize));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

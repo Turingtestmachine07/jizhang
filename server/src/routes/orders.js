@@ -1,6 +1,7 @@
 import express from 'express';
 import ExcelJS from 'exceljs';
 import db from '../database/index.js';
+import { getPaginationParams, createPaginatedResponse } from '../utils/pagination.js';
 
 const router = express.Router();
 
@@ -18,6 +19,8 @@ const generateOrderNo = () => {
 router.get('/', (req, res) => {
   try {
     const { startDate, endDate, status, customerId, keyword } = req.query;
+    const { page, pageSize, offset } = getPaginationParams(req);
+
     let sql = `
       SELECT o.*, c.name as customer_name
       FROM orders o
@@ -47,9 +50,15 @@ router.get('/', (req, res) => {
       params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
     }
 
-    sql += ' ORDER BY o.order_date DESC, o.created_at DESC';
-    const orders = db.prepare(sql).all(...params);
-    res.json(orders);
+    // 获取总数
+    const countSql = sql.replace('SELECT o.*, c.name as customer_name', 'SELECT COUNT(*) as total');
+    const { total } = db.prepare(countSql).get(...params);
+
+    // 获取分页数据
+    sql += ' ORDER BY o.order_date DESC, o.created_at DESC LIMIT ? OFFSET ?';
+    const orders = db.prepare(sql).all(...params, pageSize, offset);
+
+    res.json(createPaginatedResponse(orders, total, page, pageSize));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

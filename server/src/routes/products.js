@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../database/index.js';
+import { getPaginationParams, createPaginatedResponse } from '../utils/pagination.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const router = express.Router();
@@ -36,6 +37,8 @@ const upload = multer({
 router.get('/', (req, res) => {
   try {
     const { category, keyword } = req.query;
+    const { page, pageSize, offset } = getPaginationParams(req);
+
     let sql = 'SELECT * FROM products WHERE 1=1';
     const params = [];
 
@@ -48,9 +51,15 @@ router.get('/', (req, res) => {
       params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
     }
 
-    sql += ' ORDER BY created_at DESC';
-    const products = db.prepare(sql).all(...params);
-    res.json(products);
+    // 获取总数
+    const countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as total');
+    const { total } = db.prepare(countSql).get(...params);
+
+    // 获取分页数据
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    const products = db.prepare(sql).all(...params, pageSize, offset);
+
+    res.json(createPaginatedResponse(products, total, page, pageSize));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -60,7 +69,7 @@ router.get('/', (req, res) => {
 router.get('/categories', (req, res) => {
   try {
     const categories = db.prepare(
-      'SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != "" ORDER BY category'
+      "SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != '' ORDER BY category"
     ).all();
     res.json(categories.map(c => c.category));
   } catch (error) {

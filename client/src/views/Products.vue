@@ -226,8 +226,10 @@ onMounted(() => {
               v-if="row.photo"
               :src="row.photo"
               :preview-src-list="[row.photo]"
+              :z-index="9999"
               class="product-photo"
               fit="cover"
+              preview-teleported
             />
             <el-icon v-else class="no-photo"><Picture /></el-icon>
           </template>
@@ -370,6 +372,13 @@ onMounted(() => {
   width: 50px;
   height: 50px;
   border-radius: 4px;
+  cursor: pointer;
+}
+
+.product-photo:hover {
+  opacity: 0.8;
+  transform: scale(1.05);
+  transition: all 0.3s;
 }
 
 .no-photo {
@@ -410,5 +419,57 @@ onMounted(() => {
   width: 120px;
   height: 120px;
   object-fit: cover;
+}
+</style>
+
+<!-- 全局样式：确保图片预览在最顶层 -->
+<style>
+/* 图片预览遮罩层 */
+.el-image-viewer__wrapper {
+  z-index: 9999 !important;
+}
+
+/* 图片预览关闭按钮 */
+.el-image-viewer__close {
+  z-index: 10000 !important;
+  color: #fff !important;
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  border-radius: 50% !important;
+  width: 40px !important;
+  height: 40px !important;
+}
+
+/* 背景遮罩 - 使用适中的半透明灰色背景 */
+.el-image-viewer__mask {
+  z-index: 9998 !important;
+  background-color: rgba(0, 0, 0, 0.15) !important; /* 15%透明度的黑色，非常明亮 */
+}
+
+/* 图片容器 */
+.el-image-viewer__canvas {
+  background-color: transparent !important;
+}
+
+/* 图片本身 */
+.el-image-viewer__img {
+  max-width: 90vw !important;
+  max-height: 90vh !important;
+  filter: brightness(1.1) contrast(1.05) !important; /* 提高10%亮度和5%对比度 */
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* 工具栏按钮 */
+.el-image-viewer__actions {
+  background-color: rgba(0, 0, 0, 0.6) !important;
+  padding: 8px 20px !important;
+  border-radius: 20px !important;
+}
+
+.el-image-viewer__actions__inner {
+  color: #fff !important;
+}
+
+.el-image-viewer__actions__inner .el-icon {
+  color: #fff !important;
 }
 </style>

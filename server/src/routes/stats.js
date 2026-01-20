@@ -103,8 +103,12 @@ router.get('/sales', (req, res) => {
   try {
     const { startDate, endDate, groupBy = 'day' } = req.query;
 
+    // 白名单验证 groupBy 参数，防止 SQL 注入
+    const allowedGroupBy = ['day', 'month', 'year'];
+    const validGroupBy = allowedGroupBy.includes(groupBy) ? groupBy : 'day';
+
     let dateFormat;
-    switch (groupBy) {
+    switch (validGroupBy) {
       case 'month':
         dateFormat = '%Y-%m';
         break;
@@ -135,12 +139,9 @@ router.get('/sales', (req, res) => {
     }
 
     sql += ` GROUP BY strftime('${dateFormat}', order_date) ORDER BY date DESC`;
-    console.log('Sales SQL:', sql, 'Params:', params);
     const stats = db.prepare(sql).all(...params);
-    console.log('Sales Result:', stats);
     res.json(stats);
   } catch (error) {
-    console.error('Sales Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -242,8 +243,12 @@ router.get('/expenses', (req, res) => {
   try {
     const { startDate, endDate, groupBy = 'day' } = req.query;
 
+    // 白名单验证 groupBy 参数，防止 SQL 注入
+    const allowedGroupBy = ['day', 'month', 'year'];
+    const validGroupBy = allowedGroupBy.includes(groupBy) ? groupBy : 'day';
+
     let dateFormat;
-    switch (groupBy) {
+    switch (validGroupBy) {
       case 'month':
         dateFormat = '%Y-%m';
         break;
@@ -472,7 +477,6 @@ router.get('/export/excel', async (req, res) => {
     await workbook.xlsx.write(res);
     res.end();
   } catch (error) {
-    console.error('导出Excel错误:', error);
     res.status(500).json({ error: error.message });
   }
 });

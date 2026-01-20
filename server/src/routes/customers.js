@@ -1,5 +1,6 @@
 import express from 'express';
 import db from '../database/index.js';
+import { getPaginationParams, createPaginatedResponse } from '../utils/pagination.js';
 
 const router = express.Router();
 
@@ -7,6 +8,8 @@ const router = express.Router();
 router.get('/', (req, res) => {
   try {
     const { keyword } = req.query;
+    const { page, pageSize, offset } = getPaginationParams(req);
+
     let sql = 'SELECT * FROM customers WHERE 1=1';
     const params = [];
 
@@ -15,9 +18,15 @@ router.get('/', (req, res) => {
       params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
     }
 
-    sql += ' ORDER BY created_at DESC';
-    const customers = db.prepare(sql).all(...params);
-    res.json(customers);
+    // 获取总数
+    const countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as total');
+    const { total } = db.prepare(countSql).get(...params);
+
+    // 获取分页数据
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    const customers = db.prepare(sql).all(...params, pageSize, offset);
+
+    res.json(createPaginatedResponse(customers, total, page, pageSize));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

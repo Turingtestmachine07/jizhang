@@ -32,6 +32,8 @@ onUnmounted(() => {
 const menuItems = [
   { path: '/dashboard', icon: 'DataAnalysis', title: '仪表盘' },
   { path: '/orders', icon: 'List', title: '订单管理' },
+  { path: '/expenses', icon: 'Wallet', title: '支出管理' },
+  { path: '/financial-analysis', icon: 'PieChart', title: '财务分析' },
   { path: '/products', icon: 'Goods', title: '产品管理' },
   { path: '/customers', icon: 'User', title: '客户管理' },
   { path: '/reports', icon: 'TrendCharts', title: '统计报表' },

@@ -5,6 +5,24 @@ const api = axios.create({
   timeout: 30000
 })
 
+// 响应拦截器 - 自动处理分页响应
+api.interceptors.response.use(
+  (response) => {
+    // 如果响应包含 data 和 pagination 字段，说明是分页响应
+    if (response.data && response.data.data && response.data.pagination) {
+      // 将分页信息附加到响应对象上，方便组件访问
+      response.pagination = response.data.pagination
+      // 为了向后兼容，将 data.data 提升到 response.data
+      // 这样前端代码可以继续使用 response.data 获取数据数组
+      response.data = response.data.data
+    }
+    return response
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
 // 产品 API
 export const productApi = {
   getAll: (params) => api.get('/products', { params }),

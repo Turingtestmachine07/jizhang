@@ -24,6 +24,12 @@ const routes = [
     meta: { title: '支出管理' }
   },
   {
+    path: '/financial-analysis',
+    name: 'FinancialAnalysis',
+    component: () => import('../views/FinancialAnalysis.vue'),
+    meta: { title: '财务分析' }
+  },
+  {
     path: '/products',
     name: 'Products',
     component: () => import('../views/Products.vue'),
