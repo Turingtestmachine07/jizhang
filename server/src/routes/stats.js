@@ -330,7 +330,7 @@ router.get('/export/excel', async (req, res) => {
     workbook.created = new Date();
 
     if (type === 'sales' || !type) {
-      // 销售统计
+      // 销售统计 - 按日期汇总
       const salesSheet = workbook.addWorksheet('销售统计');
       let sql = `
         SELECT order_date as date, COUNT(*) as order_count,
@@ -371,6 +371,65 @@ router.get('/export/excel', async (req, res) => {
           order_count: salesData.reduce((sum, r) => sum + r.order_count, 0),
           total_amount: salesData.reduce((sum, r) => sum + r.total_amount, 0),
           paid_amount: salesData.reduce((sum, r) => sum + r.paid_amount, 0)
+        });
+        totalRow.font = { bold: true };
+      }
+
+      // 订单明细表 - 包含所有订单基础信息
+      const ordersSheet = workbook.addWorksheet('订单明细');
+      let ordersSql = `
+        SELECT o.order_no, o.order_date, c.name as customer_name, c.phone as customer_phone,
+               o.total_amount, o.paid_amount,
+               (o.total_amount - o.paid_amount) as unpaid_amount,
+               o.status, o.note, o.created_at
+        FROM orders o
+        LEFT JOIN customers c ON o.customer_id = c.id
+        WHERE o.status != '已取消'
+      `;
+      const ordersParams = [];
+      if (startDate) {
+        ordersSql += ' AND o.order_date >= ?';
+        ordersParams.push(startDate);
+      }
+      if (endDate) {
+        ordersSql += ' AND o.order_date <= ?';
+        ordersParams.push(endDate);
+      }
+      ordersSql += ' ORDER BY o.order_date DESC, o.created_at DESC';
+
+      const ordersData = db.prepare(ordersSql).all(...ordersParams);
+
+      ordersSheet.columns = [
+        { header: '订单编号', key: 'order_no', width: 20 },
+        { header: '订单日期', key: 'order_date', width: 12 },
+        { header: '客户名称', key: 'customer_name', width: 15 },
+        { header: '客户电话', key: 'customer_phone', width: 15 },
+        { header: '订单金额', key: 'total_amount', width: 12 },
+        { header: '已付金额', key: 'paid_amount', width: 12 },
+        { header: '欠款金额', key: 'unpaid_amount', width: 12 },
+        { header: '订单状态', key: 'status', width: 10 },
+        { header: '备注', key: 'note', width: 20 },
+        { header: '创建时间', key: 'created_at', width: 18 }
+      ];
+
+      ordersSheet.getRow(1).font = { bold: true };
+      ordersSheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+      ordersData.forEach(row => ordersSheet.addRow(row));
+
+      // 添加订单明细汇总行
+      if (ordersData.length > 0) {
+        const totalRow = ordersSheet.addRow({
+          order_no: '合计',
+          order_date: '',
+          customer_name: '',
+          customer_phone: '',
+          total_amount: ordersData.reduce((sum, r) => sum + r.total_amount, 0),
+          paid_amount: ordersData.reduce((sum, r) => sum + r.paid_amount, 0),
+          unpaid_amount: ordersData.reduce((sum, r) => sum + r.unpaid_amount, 0),
+          status: '',
+          note: '',
+          created_at: ''
         });
         totalRow.font = { bold: true };
       }
