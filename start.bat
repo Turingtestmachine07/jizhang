@@ -1,90 +1,94 @@
 @echo off
-setlocal
-:: 设置编码为 UTF-8 以支持 Emoji 显示
 chcp 65001 >nul
+setlocal
+title Financial Management System Launcher
 
-:: 设置标题
-title 财务管理记账系统启动器
-
-:: 切换到脚本所在目录
+:: Switch to script directory
 cd /d "%~dp0"
 
-echo 🚀 正在启动财务管理记账系统...
+echo [INIT] Starting Financial Management System...
 echo.
 
-:: 检查 node 是否安装
+:: Check if node is installed
 where node >nul 2>nul
 if %errorlevel% neq 0 (
-    echo ❌ 错误: 未检测到 Node.js，请先安装 Node.js
-    echo    下载地址: https://nodejs.org/
+    echo [ERROR] Node.js not detected, please install Node.js first
+    echo    Download: https://nodejs.org/
     pause
     exit /b 1
 )
 
-:: 检查文件夹是否存在
-if not exist "server\\data" (
-    mkdir "server\\data"
+echo [INFO] Node.js version:
+node -v
+echo.
+
+:: Check if data directory exists
+if not exist "server\data" (
+    echo [INFO] Creating data directory...
+    mkdir "server\data"
 )
 
-:: 启动后端服务
-echo 📦 启动后端服务...
+:: Start backend server
+echo [BACKEND] Starting server...
 cd server
 if not exist "node_modules" (
-    echo    安装后端依赖，请稍候...
+    echo    Installing server dependencies, please wait...
     call npm install
+    if %errorlevel% neq 0 (
+        echo [ERROR] Server dependencies installation failed
+        cd ..
+        pause
+        exit /b 1
+    )
 )
-:: 使用 /min 最小化启动，减少干扰
-start /min "财务系统-后端" cmd /c "npm start"
+start "Financial System - Backend" cmd /k "node src/app.js"
 cd ..
 
-:: 等待后端启动 (3秒)
+:: Wait for server to start (3 seconds)
+echo [INFO] Waiting for server to initialize...
 timeout /t 3 /nobreak >nul
 
-:: 启动前端服务
-echo 🎨 启动前端服务...
+:: Start frontend server
+echo [FRONTEND] Starting client...
 cd client
 if not exist "node_modules" (
-    echo    安装前端依赖，请稍候...
+    echo    Installing client dependencies, please wait...
     call npm install
+    if %errorlevel% neq 0 (
+        echo [ERROR] Client dependencies installation failed
+        cd ..
+        pause
+        exit /b 1
+    )
 )
-:: 使用 /min 最小化启动，减少干扰
-start /min "财务系统-前端" cmd /c "npm run dev"
+start "Financial System - Frontend" cmd /k "npm run dev"
 cd ..
 
-:: 等待前端启动 (5秒)
+:: Wait for frontend to start (5 seconds)
+echo [INFO] Waiting for frontend to initialize...
 timeout /t 5 /nobreak >nul
 
-:: 获取本机IP地址
-for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
+:: Get local IP address (simplified version to prevent errors)
+set "LOCAL_IP=localhost"
+for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4" 2^>nul') do (
     set "LOCAL_IP=%%a"
     goto :ip_found
 )
 :ip_found
-:: 去除IP地址前后的空格
+:: Remove spaces
 for /f "tokens=* delims= " %%a in ("%LOCAL_IP%") do set LOCAL_IP=%%a
 
-:: 打开浏览器
+:: Open browser
 echo.
-echo 🌐 正在打开浏览器...
+echo [BROWSER] Opening browser...
 start http://localhost:8888
 
 echo.
-echo ✅ 系统已启动成功！
+echo [SUCCESS] System startup complete!
 echo.
-echo 📍 访问地址:
-echo    本地访问: http://localhost:8888
-if defined LOCAL_IP (
-    echo    内网访问: http://%LOCAL_IP%:8888
-    echo.
-    echo 💡 提示: 同一局域网内的其他设备可使用内网地址访问
-)
+echo    Local access: http://localhost:8888
+echo    Network access: http://%LOCAL_IP%:8888
 echo.
-echo 🔧 后端服务: http://localhost:3000
+echo [TIP] If the page doesn't open, check the popup windows for error messages.
 echo.
-echo ⚠️  注意事项:
-echo    - 后端和前端服务已在后台运行（最小化窗口）
-echo    - 若要停止服务，请在任务栏找到对应窗口并关闭
-echo    - 或者使用任务管理器结束 node.exe 进程
-echo.
-echo 按任意键关闭此窗口...
-pause >nul
+pause
