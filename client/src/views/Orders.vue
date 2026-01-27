@@ -11,9 +11,6 @@ const dialogVisible = ref(false)
 const dialogTitle = ref('新建订单')
 const detailVisible = ref(false)
 const currentOrder = ref(null)
-const paymentVisible = ref(false)
-const paymentAmount = ref(0)
-const paymentOrderId = ref(null)
 const selectedOrders = ref([])
 
 // 快速新建客户弹窗
@@ -40,7 +37,6 @@ const categories = ref([])
 // 筛选条件
 const filters = ref({
   keyword: '',
-  status: '',
   customerId: '',
   startDate: '',
   endDate: ''
@@ -52,16 +48,11 @@ const form = ref({
   id: null,
   customer_id: '',
   order_date: new Date().toISOString().split('T')[0],
-  paid_amount: 0,
-  status: '待付款',
   note: '',
   items: []
 })
 
 const formRef = ref()
-
-// 订单状态选项
-const statusOptions = ['待付款', '已付款', '已完成', '已取消']
 
 // 计算订单总金额
 const totalAmount = computed(() => {
@@ -130,10 +121,8 @@ const handleAdd = () => {
     id: null,
     customer_id: '',
     order_date: new Date().toISOString().split('T')[0],
-    paid_amount: 0,
-    status: '待付款',
     note: '',
-    items: [{ product_id: '', quantity: 1, unit_price: 0, note: '' }]
+    items: [{ product_id: '', quantity: 1, unit_price: 0, subtotal: 0, note: '' }]
   }
   dialogVisible.value = true
 }
@@ -147,13 +136,12 @@ const handleEdit = async (row) => {
       id: data.id,
       customer_id: data.customer_id || '',
       order_date: data.order_date,
-      paid_amount: data.paid_amount,
-      status: data.status,
       note: data.note || '',
       items: data.items.map(item => ({
         product_id: item.product_id,
         quantity: item.quantity,
         unit_price: item.unit_price,
+        subtotal: item.subtotal || (item.quantity * item.unit_price),
         note: item.note || ''
       }))
     }
@@ -216,77 +204,92 @@ const handleBatchDelete = async () => {
   }
 }
 
-// 批量更新订单状态
-const handleBatchStatusUpdate = async (status) => {
-  if (selectedOrders.value.length === 0) {
-    ElMessage.warning('请选择要更新的订单')
-    return
-  }
-
-  try {
-    await ElMessageBox.confirm(
-      `确定要将选中的 ${selectedOrders.value.length} 个订单状态更新为"${status}"吗？`,
-      '批量更新状态',
-      { type: 'warning' }
-    )
-
-    const ids = selectedOrders.value.map(o => o.id)
-    await orderApi.batchUpdateStatus(ids, status)
-    ElMessage.success('批量更新成功')
-    selectedOrders.value = []
-    fetchOrders()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('批量更新失败')
-    }
-  }
-}
-
 // 处理选择变化
 const handleSelectionChange = (selection) => {
   selectedOrders.value = selection
 }
 
-// 更新订单状态
-const handleStatusChange = async (row, status) => {
-  try {
-    await orderApi.updateStatus(row.id, status)
-    ElMessage.success('状态更新成功')
-    fetchOrders()
-  } catch (error) {
-    ElMessage.error('状态更新失败')
-  }
-}
-
-// 打开收款弹窗
-const handlePayment = (row) => {
-  paymentOrderId.value = row.id
-  paymentAmount.value = row.total_amount - row.paid_amount
-  paymentVisible.value = true
-}
-
-// 确认收款
-const confirmPayment = async () => {
-  try {
-    const order = orders.value.find(o => o.id === paymentOrderId.value)
-    const newPaidAmount = order.paid_amount + paymentAmount.value
-    await orderApi.updatePayment(paymentOrderId.value, newPaidAmount)
-    ElMessage.success('收款成功')
-    paymentVisible.value = false
-    fetchOrders()
-  } catch (error) {
-    ElMessage.error('收款失败')
-  }
-}
-
 // 添加订单项
 const addItem = () => {
-  form.value.items.push({ product_id: '', quantity: 1, unit_price: 0, note: '' })
+  form.value.items.push({ product_id: '', quantity: 1, unit_price: 0, subtotal: 0, note: '' })
 }
 
 // 删除订单项
 const removeItem = (index) => {
   form.value.items.splice(index, 1)
+}
+
+// 解析算术表达式（支持 2*3 这样的表达式）
+const parseExpression = (value) => {
+  if (typeof value === 'number') return value
+  if (typeof value !== 'string') return 0
+
+  const str = value.trim()
+  // 检查是否包含乘法运算
+  if (str.includes('*')) {
+    try {
+      const parts = str.split('*').map(p => parseFloat(p.trim()))
+      if (parts.length === 2 && !parts.some(isNaN)) {
+        return parts[0] * parts[1]
+      }
+    } catch (e) {
+      return 0
+    }
+  }
+
+  return parseFloat(str) || 0
+}
+
+// 处理数量输入（支持算术表达式）
+const handleQuantityInput = (index, value) => {
+  const item = form.value.items[index]
+  const parsedValue = parseExpression(value)
+  item.quantity = parsedValue
+
+  // 如果单价和数量都有值，自动计算总价
+  if (item.unit_price > 0 && item.quantity > 0) {
+    item.subtotal = item.unit_price * item.quantity
+  }
+}
+
+// 处理单价变化
+const handleUnitPriceChange = (index) => {
+  const item = form.value.items[index]
+
+  // 三填二逻辑：如果有数量，自动计算总价
+  if (item.quantity > 0 && item.unit_price >= 0) {
+    item.subtotal = item.unit_price * item.quantity
+  } else if (item.subtotal > 0 && item.unit_price > 0) {
+    // 如果有总价和单价，计算数量
+    item.quantity = item.subtotal / item.unit_price
+  }
+}
+
+// 处理数量变化
+const handleQuantityChange = (index) => {
+  const item = form.value.items[index]
+
+  // 三填二逻辑：如果有单价，自动计算总价
+  if (item.unit_price > 0 && item.quantity > 0) {
+    item.subtotal = item.unit_price * item.quantity
+  } else if (item.subtotal > 0 && item.quantity > 0) {
+    // 如果有总价和数量，计算单价
+    item.unit_price = item.subtotal / item.quantity
+  }
+}
+
+// 处理总价变化
+const handleSubtotalChange = (index) => {
+  const item = form.value.items[index]
+
+  // 三填二逻辑：根据已有的值计算缺失的值
+  if (item.quantity > 0 && item.subtotal >= 0) {
+    // 有数量和总价，计算单价
+    item.unit_price = item.subtotal / item.quantity
+  } else if (item.unit_price > 0 && item.subtotal > 0) {
+    // 有单价和总价，计算数量
+    item.quantity = item.subtotal / item.unit_price
+  }
 }
 
 // 产品选择改变
@@ -295,6 +298,10 @@ const handleProductChange = (index) => {
   const product = products.value.find(p => p.id === item.product_id)
   if (product) {
     item.unit_price = product.unit_price
+    // 如果已经有数量，自动计算总价
+    if (item.quantity > 0) {
+      item.subtotal = item.unit_price * item.quantity
+    }
   }
 }
 
@@ -416,7 +423,6 @@ const handleExport = async () => {
 const resetFilters = () => {
   filters.value = {
     keyword: '',
-    status: '',
     customerId: '',
     startDate: '',
     endDate: ''
@@ -427,16 +433,6 @@ const resetFilters = () => {
 
 const formatMoney = (value) => {
   return Number(value || 0).toFixed(5)
-}
-
-const getStatusType = (status) => {
-  const types = {
-    '待付款': 'warning',
-    '已付款': 'success',
-    '已完成': 'info',
-    '已取消': 'danger'
-  }
-  return types[status] || 'info'
 }
 
 onMounted(() => {
@@ -461,11 +457,6 @@ onMounted(() => {
         <el-form-item label="客户">
           <el-select v-model="filters.customerId" placeholder="全部" clearable style="width: 120px">
             <el-option v-for="c in customers" :key="c.id" :label="c.name" :value="c.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="filters.status" placeholder="全部" clearable style="width: 100px">
-            <el-option v-for="s in statusOptions" :key="s" :label="s" :value="s" />
           </el-select>
         </el-form-item>
         <el-form-item label="日期">
@@ -498,20 +489,6 @@ onMounted(() => {
       <!-- 批量操作栏 -->
       <div v-if="selectedOrders.length > 0" class="batch-actions">
         <span class="batch-info">已选择 {{ selectedOrders.length }} 项</span>
-        <el-button-group>
-          <el-button size="small" @click="handleBatchStatusUpdate('待付款')">
-            标记为待付款
-          </el-button>
-          <el-button size="small" @click="handleBatchStatusUpdate('已付款')">
-            标记为已付款
-          </el-button>
-          <el-button size="small" @click="handleBatchStatusUpdate('已完成')">
-            标记为已完成
-          </el-button>
-          <el-button size="small" @click="handleBatchStatusUpdate('已取消')">
-            标记为已取消
-          </el-button>
-        </el-button-group>
         <el-button
           type="danger"
           size="small"
@@ -542,51 +519,16 @@ onMounted(() => {
             <span class="amount">¥{{ formatMoney(row.total_amount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="paid_amount" label="已付金额" min-width="100" class-name="hide-on-mobile">
-          <template #default="{ row }">
-            ¥{{ formatMoney(row.paid_amount) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="欠款" min-width="90" class-name="hide-on-mobile">
-          <template #default="{ row }">
-            <span :class="{ 'amount negative': row.total_amount > row.paid_amount }">
-              ¥{{ formatMoney(row.total_amount - row.paid_amount) }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态" min-width="80">
-          <template #default="{ row }">
-            <el-dropdown trigger="click" @command="(cmd) => handleStatusChange(row, cmd)">
-              <el-tag :type="getStatusType(row.status)" style="cursor: pointer">
-                {{ row.status }}
-              </el-tag>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item v-for="s in statusOptions" :key="s" :command="s">
-                    {{ s }}
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </template>
-        </el-table-column>
         <el-table-column prop="order_date" label="订单日期" min-width="100" class-name="hide-on-mobile" />
         <el-table-column prop="note" label="备注" min-width="100" class-name="hide-on-mobile">
           <template #default="{ row }">
             {{ row.note || '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" min-width="160" fixed="right">
+        <el-table-column label="操作" min-width="120" fixed="right">
           <template #default="{ row }">
             <el-button text type="primary" size="small" @click="handleDetail(row)">
               详情
-            </el-button>
-            <el-button
-              v-if="row.total_amount > row.paid_amount && row.status !== '已取消'"
-              text type="success" size="small"
-              @click="handlePayment(row)"
-            >
-              收款
             </el-button>
             <el-button text type="primary" size="small" @click="handleEdit(row)">
               编辑
@@ -624,21 +566,6 @@ onMounted(() => {
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="已付金额">
-              <el-input-number v-model="form.paid_amount" :min="0" :precision="5" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="状态">
-              <el-select v-model="form.status" style="width: 100%">
-                <el-option v-for="s in statusOptions" :key="s" :label="s" :value="s" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
         <el-divider content-position="left">
           订单明细
           <el-button type="primary" link @click="openQuickProduct" style="margin-left: 10px">
@@ -648,29 +575,67 @@ onMounted(() => {
 
         <div class="order-items">
           <div v-for="(item, index) in form.items" :key="index" class="order-item">
-            <el-select
-              v-model="item.product_id"
-              placeholder="选择产品"
-              filterable
-              style="width: 200px"
-              @change="handleProductChange(index)"
-            >
-              <el-option
-                v-for="p in products"
-                :key="p.id"
-                :label="p.name"
-                :value="p.id"
+            <div class="order-item-field">
+              <label class="field-label">产品</label>
+              <el-select
+                v-model="item.product_id"
+                placeholder="选择产品"
+                filterable
+                style="width: 180px"
+                @change="handleProductChange(index)"
               >
-                <span>{{ p.name }}</span>
-                <span style="color: #999; margin-left: 10px">¥{{ p.unit_price }}</span>
-              </el-option>
-            </el-select>
-            <el-input-number v-model="item.quantity" :min="1" placeholder="数量" style="width: 100px" />
-            <el-input-number v-model="item.unit_price" :min="0" :precision="5" placeholder="单价" style="width: 120px" />
-            <span class="item-subtotal">
-              小计: ¥{{ formatMoney(item.quantity * item.unit_price) }}
-            </span>
-            <el-button text type="danger" @click="removeItem(index)">
+                <el-option
+                  v-for="p in products"
+                  :key="p.id"
+                  :label="p.name"
+                  :value="p.id"
+                >
+                  <span>{{ p.name }}</span>
+                  <span style="color: #999; margin-left: 10px">¥{{ p.unit_price }}</span>
+                </el-option>
+              </el-select>
+            </div>
+            <div class="order-item-field">
+              <label class="field-label">数量</label>
+              <el-input
+                v-model="item.quantity"
+                placeholder="支持2*3"
+                style="width: 140px"
+                @blur="handleQuantityInput(index, item.quantity)"
+                @change="handleQuantityChange(index)"
+              />
+            </div>
+            <div class="order-item-field">
+              <label class="field-label">单价</label>
+              <el-input-number
+                v-model="item.unit_price"
+                :min="0"
+                :precision="5"
+                placeholder="单价"
+                style="width: 150px"
+                :controls="false"
+                @change="handleUnitPriceChange(index)"
+              />
+            </div>
+            <div class="order-item-field">
+              <label class="field-label">总价</label>
+              <el-input-number
+                v-model="item.subtotal"
+                :min="0"
+                :precision="5"
+                placeholder="总价"
+                style="width: 150px"
+                :controls="false"
+                @change="handleSubtotalChange(index)"
+              />
+            </div>
+            <div class="order-item-field">
+              <label class="field-label">小计</label>
+              <span class="item-subtotal-display">
+                ¥{{ formatMoney(item.subtotal || item.quantity * item.unit_price) }}
+              </span>
+            </div>
+            <el-button text type="danger" @click="removeItem(index)" style="margin-top: 20px;">
               <el-icon><Delete /></el-icon>
             </el-button>
           </div>
@@ -751,13 +716,6 @@ onMounted(() => {
           <el-descriptions-item label="订单编号">{{ currentOrder.order_no }}</el-descriptions-item>
           <el-descriptions-item label="客户">{{ currentOrder.customer_name || '-' }}</el-descriptions-item>
           <el-descriptions-item label="订单金额">¥{{ formatMoney(currentOrder.total_amount) }}</el-descriptions-item>
-          <el-descriptions-item label="已付金额">¥{{ formatMoney(currentOrder.paid_amount) }}</el-descriptions-item>
-          <el-descriptions-item label="欠款金额">
-            <span class="amount negative">¥{{ formatMoney(currentOrder.total_amount - currentOrder.paid_amount) }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="状态">
-            <el-tag :type="getStatusType(currentOrder.status)">{{ currentOrder.status }}</el-tag>
-          </el-descriptions-item>
           <el-descriptions-item label="订单日期">{{ currentOrder.order_date }}</el-descriptions-item>
           <el-descriptions-item label="创建时间">{{ currentOrder.created_at }}</el-descriptions-item>
           <el-descriptions-item label="备注" :span="2">{{ currentOrder.note || '-' }}</el-descriptions-item>
@@ -796,19 +754,6 @@ onMounted(() => {
         </el-table>
       </template>
     </el-drawer>
-
-    <!-- 收款弹窗 -->
-    <el-dialog v-model="paymentVisible" title="收款" width="400px">
-      <el-form label-width="80px">
-        <el-form-item label="收款金额">
-          <el-input-number v-model="paymentAmount" :min="0" :precision="5" style="width: 100%" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="paymentVisible = false">取消</el-button>
-        <el-button type="primary" @click="confirmPayment">确认收款</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -825,15 +770,36 @@ onMounted(() => {
 
 .order-item {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 10px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.order-item-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field-label {
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  font-weight: 500;
 }
 
 .item-subtotal {
   color: var(--el-text-color-secondary);
   font-size: 14px;
   min-width: 100px;
+}
+
+.item-subtotal-display {
+  color: var(--el-color-primary);
+  font-weight: bold;
+  font-size: 14px;
+  min-width: 100px;
+  padding: 8px 0;
 }
 
 .dialog-footer {

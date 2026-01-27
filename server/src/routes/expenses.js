@@ -50,7 +50,7 @@ router.delete('/categories/:id', (req, res) => {
 // 获取所有支出
 router.get('/', (req, res) => {
   try {
-    const { startDate, endDate, categoryId, keyword, paymentMethod } = req.query;
+    const { startDate, endDate, categoryId, keyword } = req.query;
     const { page, pageSize, offset } = getPaginationParams(req);
 
     let sql = `
@@ -72,10 +72,6 @@ router.get('/', (req, res) => {
     if (categoryId) {
       sql += ' AND e.category_id = ?';
       params.push(categoryId);
-    }
-    if (paymentMethod) {
-      sql += ' AND e.payment_method = ?';
-      params.push(paymentMethod);
     }
     if (keyword) {
       sql += ' AND (e.expense_no LIKE ? OR e.payee LIKE ? OR e.note LIKE ?)';
@@ -118,18 +114,17 @@ router.get('/:id', (req, res) => {
 // 创建支出
 router.post('/', (req, res) => {
   try {
-    const { category_id, amount, expense_date, payee, payment_method, note } = req.body;
+    const { category_id, amount, expense_date, payee, note } = req.body;
 
     const result = db.prepare(`
-      INSERT INTO expenses (expense_no, category_id, amount, expense_date, payee, payment_method, note)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO expenses (expense_no, category_id, amount, expense_date, payee, note)
+      VALUES (?, ?, ?, ?, ?, ?)
     `).run(
       generateExpenseNo(),
       category_id || null,
       amount,
       expense_date || new Date().toISOString().split('T')[0],
       payee,
-      payment_method || '现金',
       note
     );
 
@@ -143,18 +138,17 @@ router.post('/', (req, res) => {
 // 更新支出
 router.put('/:id', (req, res) => {
   try {
-    const { category_id, amount, expense_date, payee, payment_method, note } = req.body;
+    const { category_id, amount, expense_date, payee, note } = req.body;
 
     db.prepare(`
       UPDATE expenses
-      SET category_id = ?, amount = ?, expense_date = ?, payee = ?, payment_method = ?, note = ?
+      SET category_id = ?, amount = ?, expense_date = ?, payee = ?, note = ?
       WHERE id = ?
     `).run(
       category_id || null,
       amount,
       expense_date,
       payee,
-      payment_method,
       note,
       req.params.id
     );
@@ -213,7 +207,6 @@ router.get('/export/excel', async (req, res) => {
       { header: '金额', key: 'amount', width: 12 },
       { header: '支出日期', key: 'expense_date', width: 12 },
       { header: '收款方', key: 'payee', width: 15 },
-      { header: '支付方式', key: 'payment_method', width: 12 },
       { header: '备注', key: 'note', width: 20 }
     ];
 
@@ -229,7 +222,6 @@ router.get('/export/excel', async (req, res) => {
         amount: expenses.reduce((sum, r) => sum + r.amount, 0),
         expense_date: '',
         payee: '',
-        payment_method: '',
         note: ''
       });
       totalRow.font = { bold: true };

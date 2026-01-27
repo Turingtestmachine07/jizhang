@@ -199,10 +199,24 @@ router.get('/:id/stats', (req, res) => {
   }
 });
 
+// 获取产品价格历史
+router.get('/:id/price-history', (req, res) => {
+  try {
+    const history = db.prepare(`
+      SELECT * FROM product_price_history
+      WHERE product_id = ?
+      ORDER BY changed_at DESC
+    `).all(req.params.id);
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 创建产品
 router.post('/', upload.single('photo'), processImage, (req, res) => {
   try {
-    const { name, category, spec, unit, unit_price, description } = req.body;
+    const { name, category, spec, unit, unit_price, description, param_option, product_type, color } = req.body;
     const photo = req.file ? `/uploads/${req.file.filename}` : (req.body.photo || null);
 
     console.log('创建产品 - req.file:', req.file);
@@ -210,9 +224,9 @@ router.post('/', upload.single('photo'), processImage, (req, res) => {
     console.log('创建产品 - 最终photo值:', photo);
 
     const result = db.prepare(`
-      INSERT INTO products (name, category, spec, unit, unit_price, photo, description)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(name, category, spec, unit, unit_price || 0, photo, description);
+      INSERT INTO products (name, category, spec, unit, unit_price, photo, description, param_option, product_type, color)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(name, category, spec, unit, unit_price || 0, photo, description, param_option, product_type, color);
 
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json(product);
@@ -224,18 +238,32 @@ router.post('/', upload.single('photo'), processImage, (req, res) => {
 // 更新产品
 router.put('/:id', upload.single('photo'), processImage, (req, res) => {
   try {
-    const { name, category, spec, unit, unit_price, description } = req.body;
+    const { name, category, spec, unit, unit_price, description, param_option, product_type, color } = req.body;
     const photo = req.file ? `/uploads/${req.file.filename}` : req.body.photo;
 
     console.log('更新产品 - req.file:', req.file);
     console.log('更新产品 - req.body.photo:', req.body.photo);
     console.log('更新产品 - 最终photo值:', photo);
 
+    // 获取旧价格
+    const oldProduct = db.prepare('SELECT unit_price FROM products WHERE id = ?').get(req.params.id);
+    const newPrice = parseFloat(unit_price) || 0;
+    const oldPrice = oldProduct ? parseFloat(oldProduct.unit_price) : null;
+
+    // 更新产品
     db.prepare(`
       UPDATE products
-      SET name = ?, category = ?, spec = ?, unit = ?, unit_price = ?, photo = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+      SET name = ?, category = ?, spec = ?, unit = ?, unit_price = ?, photo = ?, description = ?, param_option = ?, product_type = ?, color = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(name, category, spec, unit, unit_price || 0, photo, description, req.params.id);
+    `).run(name, category, spec, unit, newPrice, photo, description, param_option, product_type, color, req.params.id);
+
+    // 如果价格发生变化，记录价格历史
+    if (oldPrice !== null && oldPrice !== newPrice) {
+      db.prepare(`
+        INSERT INTO product_price_history (product_id, old_price, new_price)
+        VALUES (?, ?, ?)
+      `).run(req.params.id, oldPrice, newPrice);
+    }
 
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
     res.json(product);

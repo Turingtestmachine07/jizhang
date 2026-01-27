@@ -18,7 +18,7 @@ const generateOrderNo = () => {
 // 获取所有订单
 router.get('/', (req, res) => {
   try {
-    const { startDate, endDate, status, customerId, keyword } = req.query;
+    const { startDate, endDate, customerId, keyword } = req.query;
     const { page, pageSize, offset } = getPaginationParams(req);
 
     let sql = `
@@ -36,10 +36,6 @@ router.get('/', (req, res) => {
     if (endDate) {
       sql += ' AND o.order_date <= ?';
       params.push(endDate);
-    }
-    if (status) {
-      sql += ' AND o.status = ?';
-      params.push(status);
     }
     if (customerId) {
       sql += ' AND o.customer_id = ?';
@@ -95,7 +91,7 @@ router.get('/:id', (req, res) => {
 // 创建订单
 router.post('/', (req, res) => {
   try {
-    const { customer_id, items, order_date, paid_amount, status, note } = req.body;
+    const { customer_id, items, order_date, note } = req.body;
 
     // 计算总金额
     const total_amount = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
@@ -103,14 +99,12 @@ router.post('/', (req, res) => {
     const insertOrder = db.transaction(() => {
       // 插入订单
       const orderResult = db.prepare(`
-        INSERT INTO orders (order_no, customer_id, total_amount, paid_amount, status, order_date, note)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO orders (order_no, customer_id, total_amount, order_date, note)
+        VALUES (?, ?, ?, ?, ?)
       `).run(
         generateOrderNo(),
         customer_id || null,
         total_amount,
-        paid_amount || 0,
-        status || '待付款',
         order_date || new Date().toISOString().split('T')[0],
         note
       );
@@ -148,7 +142,7 @@ router.post('/', (req, res) => {
 // 更新订单
 router.put('/:id', (req, res) => {
   try {
-    const { customer_id, items, order_date, paid_amount, status, note } = req.body;
+    const { customer_id, items, order_date, note } = req.body;
 
     // 计算总金额
     const total_amount = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
@@ -157,13 +151,11 @@ router.put('/:id', (req, res) => {
       // 更新订单
       db.prepare(`
         UPDATE orders
-        SET customer_id = ?, total_amount = ?, paid_amount = ?, status = ?, order_date = ?, note = ?
+        SET customer_id = ?, total_amount = ?, order_date = ?, note = ?
         WHERE id = ?
       `).run(
         customer_id || null,
         total_amount,
-        paid_amount || 0,
-        status,
         order_date,
         note,
         req.params.id
@@ -193,38 +185,6 @@ router.put('/:id', (req, res) => {
     updateOrder();
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
     res.json(order);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 更新订单状态
-router.patch('/:id/status', (req, res) => {
-  try {
-    const { status } = req.body;
-    db.prepare('UPDATE orders SET status = ? WHERE id = ?').run(status, req.params.id);
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
-    res.json(order);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 更新订单付款金额
-router.patch('/:id/payment', (req, res) => {
-  try {
-    const { paid_amount } = req.body;
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
-
-    // 如果已付金额等于总金额，自动更新状态为已付款
-    let newStatus = order.status;
-    if (paid_amount >= order.total_amount) {
-      newStatus = '已付款';
-    }
-
-    db.prepare('UPDATE orders SET paid_amount = ?, status = ? WHERE id = ?').run(paid_amount, newStatus, req.params.id);
-    const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
-    res.json(updatedOrder);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -261,35 +221,10 @@ router.post('/batch/delete', (req, res) => {
   }
 });
 
-// 批量更新订单状态
-router.post('/batch/status', (req, res) => {
-  try {
-    const { ids, status } = req.body;
-
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: '请提供要更新的订单ID列表' });
-    }
-
-    if (!status) {
-      return res.status(400).json({ error: '请提供要更新的状态' });
-    }
-
-    const placeholders = ids.map(() => '?').join(',');
-    const result = db.prepare(`UPDATE orders SET status = ? WHERE id IN (${placeholders})`).run(status, ...ids);
-
-    res.json({
-      message: '批量更新成功',
-      updatedCount: result.changes
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // 导出订单到Excel
 router.get('/export/excel', async (req, res) => {
   try {
-    const { startDate, endDate, status, customerId } = req.query;
+    const { startDate, endDate, customerId } = req.query;
     let sql = `
       SELECT o.*, c.name as customer_name
       FROM orders o
@@ -305,10 +240,6 @@ router.get('/export/excel', async (req, res) => {
     if (endDate) {
       sql += ' AND o.order_date <= ?';
       params.push(endDate);
-    }
-    if (status) {
-      sql += ' AND o.status = ?';
-      params.push(status);
     }
     if (customerId) {
       sql += ' AND o.customer_id = ?';
@@ -328,18 +259,12 @@ router.get('/export/excel', async (req, res) => {
       { header: '客户名称', key: 'customer_name', width: 15 },
       { header: '订单日期', key: 'order_date', width: 12 },
       { header: '订单金额', key: 'total_amount', width: 12 },
-      { header: '已付金额', key: 'paid_amount', width: 12 },
-      { header: '欠款金额', key: 'unpaid', width: 12 },
-      { header: '状态', key: 'status', width: 10 },
       { header: '备注', key: 'note', width: 20 }
     ];
 
     // 添加数据
     orders.forEach(order => {
-      worksheet.addRow({
-        ...order,
-        unpaid: order.total_amount - order.paid_amount
-      });
+      worksheet.addRow(order);
     });
 
     // 设置响应头

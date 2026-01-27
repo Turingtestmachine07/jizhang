@@ -23,10 +23,30 @@ const initDB = () => {
       unit_price DECIMAL(10,5) DEFAULT 0,
       photo TEXT,
       description TEXT,
+      param_option TEXT,
+      product_type TEXT,
+      color TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // 为已存在的产品表添加新字段（如果不存在）
+  try {
+    db.exec(`ALTER TABLE products ADD COLUMN param_option TEXT`);
+  } catch (e) {
+    // 字段已存在，忽略错误
+  }
+  try {
+    db.exec(`ALTER TABLE products ADD COLUMN product_type TEXT`);
+  } catch (e) {
+    // 字段已存在，忽略错误
+  }
+  try {
+    db.exec(`ALTER TABLE products ADD COLUMN color TEXT`);
+  } catch (e) {
+    // 字段已存在，忽略错误
+  }
 
   // 客户表
   db.exec(`
@@ -47,8 +67,6 @@ const initDB = () => {
       order_no TEXT NOT NULL UNIQUE,
       customer_id INTEGER,
       total_amount DECIMAL(10,5) DEFAULT 0,
-      paid_amount DECIMAL(10,5) DEFAULT 0,
-      status TEXT DEFAULT '待付款',
       order_date DATE DEFAULT CURRENT_DATE,
       note TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -75,7 +93,6 @@ const initDB = () => {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
     CREATE INDEX IF NOT EXISTS idx_orders_order_date ON orders(order_date);
-    CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
     CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
     CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
   `);
@@ -99,6 +116,24 @@ const initDB = () => {
     )
   `);
 
+  // 产品价格历史表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS product_price_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL,
+      old_price DECIMAL(10,5),
+      new_price DECIMAL(10,5) NOT NULL,
+      changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    )
+  `);
+
+  // 价格历史索引
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_price_history_product_id ON product_price_history(product_id);
+    CREATE INDEX IF NOT EXISTS idx_price_history_changed_at ON product_price_history(changed_at);
+  `);
+
   // 支出表
   db.exec(`
     CREATE TABLE IF NOT EXISTS expenses (
@@ -108,7 +143,6 @@ const initDB = () => {
       amount DECIMAL(10,5) NOT NULL,
       expense_date DATE DEFAULT CURRENT_DATE,
       payee TEXT,
-      payment_method TEXT DEFAULT '现金',
       note TEXT,
       attachment TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

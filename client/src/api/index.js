@@ -32,6 +32,7 @@ export const productApi = {
   deleteCategory: (id) => api.delete(`/products/categories/${id}`),
   getOrders: (id, params) => api.get(`/products/${id}/orders`, { params }),
   getStats: (id) => api.get(`/products/${id}/stats`),
+  getPriceHistory: (id) => api.get(`/products/${id}/price-history`),
   create: (data) => {
     const formData = new FormData()
     Object.keys(data).forEach(key => {

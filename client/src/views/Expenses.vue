@@ -13,14 +13,10 @@ const categoryDialogVisible = ref(false)
 // 筛选条件
 const filters = ref({
   keyword: '',
-  categoryId: '',
-  paymentMethod: ''
+  categoryId: ''
 })
 
 const dateRange = ref([])
-
-// 支付方式选项
-const paymentMethods = ['现金', '微信', '支付宝', '银行转账', '信用卡', '其他']
 
 // 表单数据
 const form = ref({
@@ -29,7 +25,6 @@ const form = ref({
   amount: 0,
   expense_date: new Date().toISOString().split('T')[0],
   payee: '',
-  payment_method: '现金',
   note: ''
 })
 
@@ -78,7 +73,7 @@ const fetchCategories = async () => {
 
 // 重置筛选
 const resetFilters = () => {
-  filters.value = { keyword: '', categoryId: '', paymentMethod: '' }
+  filters.value = { keyword: '', categoryId: '' }
   dateRange.value = []
   fetchExpenses()
 }
@@ -92,7 +87,6 @@ const handleAdd = () => {
     amount: 0,
     expense_date: new Date().toISOString().split('T')[0],
     payee: '',
-    payment_method: '现金',
     note: ''
   }
   dialogVisible.value = true
@@ -230,11 +224,6 @@ onMounted(() => {
             <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="支付方式">
-          <el-select v-model="filters.paymentMethod" placeholder="全部" clearable style="width: 100px">
-            <el-option v-for="m in paymentMethods" :key="m" :label="m" :value="m" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="日期">
           <el-date-picker
             v-model="dateRange"
@@ -302,11 +291,6 @@ onMounted(() => {
             {{ row.payee || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="payment_method" label="支付方式" min-width="90">
-          <template #default="{ row }">
-            <el-tag size="small" type="info">{{ row.payment_method }}</el-tag>
-          </template>
-        </el-table-column>
         <el-table-column prop="note" label="备注" min-width="120" class-name="hide-on-mobile">
           <template #default="{ row }">
             {{ row.note || '-' }}
@@ -347,11 +331,6 @@ onMounted(() => {
         </el-form-item>
         <el-form-item label="收款方">
           <el-input v-model="form.payee" placeholder="收款方名称" />
-        </el-form-item>
-        <el-form-item label="支付方式">
-          <el-select v-model="form.payment_method" style="width: 100%">
-            <el-option v-for="m in paymentMethods" :key="m" :label="m" :value="m" />
-          </el-select>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.note" type="textarea" :rows="3" placeholder="备注信息" />

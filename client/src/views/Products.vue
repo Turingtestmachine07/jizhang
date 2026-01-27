@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Camera } from '@element-plus/icons-vue'
 import { productApi } from '../api'
 import QRCode from 'qrcode'
 import axios from 'axios'
@@ -14,7 +15,10 @@ const detailVisible = ref(false)
 const currentProduct = ref(null)
 const productStats = ref(null)
 const productOrders = ref([])
+const priceHistory = ref([]) // 价格历史
 const selectedProducts = ref([]) // 批量选中的产品
+const editingPriceId = ref(null) // 正在编辑价格的产品ID
+const editingPrice = ref(0) // 编辑中的价格
 
 // 筛选条件
 const filters = ref({
@@ -31,17 +35,29 @@ const form = ref({
   unit: '',
   unit_price: 0,
   description: '',
-  photo: null
+  photo: null,
+  param_option: '',
+  product_type: '',
+  color: ''
 })
 
 const formRef = ref()
 const rules = {
-  name: [{ required: true, message: '请输入产品名称', trigger: 'blur' }]
+  // 产品名称自动生成，不需要验证
 }
 
 // 图片预览
 const imageUrl = ref('')
 const fileList = ref([])
+
+// 自动生成产品名称
+const generateProductName = () => {
+  const parts = []
+  if (form.value.category) parts.push(form.value.category)
+  if (form.value.param_option) parts.push(form.value.param_option)
+  if (form.value.color) parts.push(form.value.color)
+  form.value.name = parts.join(' ')
+}
 
 // 将相对路径转换为完整URL（用于显示）
 const getImageUrl = (photoPath) => {
@@ -89,7 +105,10 @@ const handleAdd = () => {
     unit: '',
     unit_price: 0,
     description: '',
-    photo: null
+    photo: null,
+    param_option: '',
+    product_type: '',
+    color: ''
   }
   imageUrl.value = ''
   fileList.value = []
@@ -110,12 +129,14 @@ const handleDetail = async (row) => {
   currentProduct.value = row
   detailVisible.value = true
   try {
-    const [statsRes, ordersRes] = await Promise.all([
+    const [statsRes, ordersRes, historyRes] = await Promise.all([
       productApi.getStats(row.id),
-      productApi.getOrders(row.id)
+      productApi.getOrders(row.id),
+      productApi.getPriceHistory(row.id)
     ])
     productStats.value = statsRes.data
     productOrders.value = ordersRes.data || []
+    priceHistory.value = historyRes.data || []
   } catch (error) {
     ElMessage.error('获取产品详情失败')
   }
@@ -134,6 +155,40 @@ const handleDelete = async (row) => {
     if (error !== 'cancel') {
       ElMessage.error('删除失败')
     }
+  }
+}
+
+// 开始编辑价格
+const startEditPrice = (row) => {
+  editingPriceId.value = row.id
+  editingPrice.value = row.unit_price
+}
+
+// 取消编辑价格
+const cancelEditPrice = () => {
+  editingPriceId.value = null
+  editingPrice.value = 0
+}
+
+// 保存价格
+const savePrice = async (row) => {
+  try {
+    const newPrice = parseFloat(editingPrice.value)
+    if (isNaN(newPrice) || newPrice < 0) {
+      ElMessage.warning('请输入有效的价格')
+      return
+    }
+
+    await productApi.update(row.id, {
+      ...row,
+      unit_price: newPrice
+    })
+
+    ElMessage.success('价格更新成功')
+    editingPriceId.value = null
+    fetchProducts()
+  } catch (error) {
+    ElMessage.error('价格更新失败')
   }
 }
 
@@ -455,9 +510,30 @@ onMounted(() => {
             {{ row.unit || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="unit_price" label="单价" width="100">
+        <el-table-column prop="unit_price" label="单价" width="200">
           <template #default="{ row }">
-            ¥{{ formatMoney(row.unit_price) }}
+            <div v-if="editingPriceId === row.id" style="display: flex; gap: 5px; align-items: center;">
+              <el-input-number
+                v-model="editingPrice"
+                :min="0"
+                :precision="5"
+                size="small"
+                style="width: 150px"
+                :controls="false"
+              />
+              <el-button text type="success" size="small" @click="savePrice(row)">
+                <el-icon><Check /></el-icon>
+              </el-button>
+              <el-button text type="info" size="small" @click="cancelEditPrice">
+                <el-icon><Close /></el-icon>
+              </el-button>
+            </div>
+            <div v-else style="display: flex; align-items: center; gap: 5px;">
+              <span>¥{{ formatMoney(row.unit_price) }}</span>
+              <el-button text type="primary" size="small" @click="startEditPrice(row)">
+                <el-icon><Edit /></el-icon>
+              </el-button>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
@@ -497,18 +573,37 @@ onMounted(() => {
                 移除图片
               </el-button>
               <el-button type="primary" text @click="startQRUpload">
-                <el-icon><QrCode /></el-icon> 扫码上传
+                <el-icon><Camera /></el-icon> 扫码上传
               </el-button>
             </div>
           </div>
         </el-form-item>
-        <el-form-item label="产品名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入产品名称" />
-        </el-form-item>
         <el-form-item label="分类">
-          <el-select v-model="form.category" placeholder="选择或输入分类" filterable allow-create>
+          <el-select v-model="form.category" placeholder="选择或输入分类" filterable allow-create style="width: 100%" @change="generateProductName">
             <el-option v-for="cat in categories" :key="cat" :label="cat" :value="cat" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="参数">
+          <el-select v-model="form.param_option" placeholder="选择或输入参数" clearable filterable allow-create style="width: 100%" @change="generateProductName">
+            <el-option label="小" value="小" />
+            <el-option label="中" value="中" />
+            <el-option label="大" value="大" />
+            <el-option label="特大" value="特大" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="颜色">
+          <el-select v-model="form.color" placeholder="选择或输入颜色" clearable filterable allow-create style="width: 100%" @change="generateProductName">
+            <el-option label="红色" value="红色" />
+            <el-option label="蓝色" value="蓝色" />
+            <el-option label="绿色" value="绿色" />
+            <el-option label="黄色" value="黄色" />
+            <el-option label="黑色" value="黑色" />
+            <el-option label="白色" value="白色" />
+            <el-option label="灰色" value="灰色" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="产品名称">
+          <el-input v-model="form.name" placeholder="自动生成" readonly style="background-color: var(--el-fill-color-light);" />
         </el-form-item>
         <el-form-item label="规格参数">
           <el-input v-model="form.spec" placeholder="如: 500ml/瓶" />
@@ -569,6 +664,22 @@ onMounted(() => {
           </el-table-column>
           <el-table-column prop="order_date" label="日期" width="110" />
         </el-table>
+
+        <el-divider>价格历史</el-divider>
+        <el-timeline v-if="priceHistory.length > 0">
+          <el-timeline-item
+            v-for="item in priceHistory"
+            :key="item.id"
+            :timestamp="new Date(item.changed_at).toLocaleString('zh-CN')"
+            placement="top"
+          >
+            <div>
+              <span v-if="item.old_price">¥{{ formatMoney(item.old_price) }} → </span>
+              <span style="color: #409eff; font-weight: bold">¥{{ formatMoney(item.new_price) }}</span>
+            </div>
+          </el-timeline-item>
+        </el-timeline>
+        <el-empty v-else description="暂无价格变动记录" :image-size="80" />
       </template>
     </el-drawer>
 
