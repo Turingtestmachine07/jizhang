@@ -11,14 +11,14 @@ if %errorlevel% neq 0 (
 
 echo Step 2: Starting Server...
 cd server
-start "Backend" cmd /k node src/app.js
+start "Backend" cmd /k "cd /d "%~dp0server" && node src/app.js"
 cd ..
 
 timeout /t 3
 
 echo Step 3: Starting Client...
 cd client
-start "Frontend" cmd /k npm run dev
+start "Frontend" cmd /k "cd /d "%~dp0client" && npm run dev"
 cd ..
 
 echo Done! Browser should open manually at http://localhost:8888

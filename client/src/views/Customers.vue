@@ -172,7 +172,7 @@ const handleSubmit = async () => {
 }
 
 const formatMoney = (value) => {
-  return Number(value || 0).toFixed(2)
+  return Number(value || 0).toFixed(5)
 }
 
 const getStatusType = (status) => {
@@ -320,13 +320,13 @@ onMounted(() => {
             <el-statistic title="订单数" :value="customerStats.order_count" />
           </el-col>
           <el-col :span="6">
-            <el-statistic title="消费总额" :value="customerStats.total_amount" prefix="¥" :precision="2" />
+            <el-statistic title="消费总额" :value="customerStats.total_amount" prefix="¥" :precision="5" />
           </el-col>
           <el-col :span="6">
-            <el-statistic title="已付金额" :value="customerStats.paid_amount" prefix="¥" :precision="2" />
+            <el-statistic title="已付金额" :value="customerStats.paid_amount" prefix="¥" :precision="5" />
           </el-col>
           <el-col :span="6">
-            <el-statistic title="欠款金额" :value="customerStats.unpaid_amount" prefix="¥" :precision="2" value-style="color: #f56c6c" />
+            <el-statistic title="欠款金额" :value="customerStats.unpaid_amount" prefix="¥" :precision="5" value-style="color: #f56c6c" />
           </el-col>
         </el-row>
 

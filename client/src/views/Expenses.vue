@@ -202,7 +202,7 @@ const handleExport = async () => {
 }
 
 const formatMoney = (value) => {
-  return Number(value || 0).toFixed(2)
+  return Number(value || 0).toFixed(5)
 }
 
 onMounted(() => {
@@ -273,10 +273,10 @@ onMounted(() => {
           <el-statistic title="支出笔数" :value="expenses.length" />
         </el-col>
         <el-col :span="8">
-          <el-statistic title="支出总额" :value="totalAmount" prefix="¥" :precision="2" value-style="color: #f56c6c" />
+          <el-statistic title="支出总额" :value="totalAmount" prefix="¥" :precision="5" value-style="color: #f56c6c" />
         </el-col>
         <el-col :span="8">
-          <el-statistic title="平均金额" :value="expenses.length ? totalAmount / expenses.length : 0" prefix="¥" :precision="2" />
+          <el-statistic title="平均金额" :value="expenses.length ? totalAmount / expenses.length : 0" prefix="¥" :precision="5" />
         </el-col>
       </el-row>
     </el-card>
@@ -334,7 +334,7 @@ onMounted(() => {
           </el-select>
         </el-form-item>
         <el-form-item label="金额" prop="amount">
-          <el-input-number v-model="form.amount" :min="0" :precision="2" style="width: 100%" />
+          <el-input-number v-model="form.amount" :min="0" :precision="5" style="width: 100%" />
         </el-form-item>
         <el-form-item label="日期" prop="expense_date">
           <el-date-picker

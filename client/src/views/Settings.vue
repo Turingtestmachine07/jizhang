@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useThemeStore } from '../stores/theme'
-import { backupApi, imageCleanerApi } from '../api'
+import { backupApi, imageCleanerApi, productApi } from '../api'
 
 const themeStore = useThemeStore()
 const loading = ref(false)
@@ -16,6 +16,12 @@ const configLoading = ref(false)
 // 图片清理相关
 const imageStats = ref(null)
 const cleaningImages = ref(false)
+
+// 产品分类相关
+const productCategories = ref([])
+const categoryDialogVisible = ref(false)
+const categoryForm = ref({ name: '' })
+const categoryLoading = ref(false)
 
 // 获取自动备份配置
 const fetchBackupConfig = async () => {
@@ -155,10 +161,63 @@ const handleCleanImages = async () => {
   }
 }
 
+// 获取产品分类列表
+const fetchProductCategories = async () => {
+  try {
+    categoryLoading.value = true
+    const { data } = await productApi.getCategories()
+    productCategories.value = data || []
+  } catch (error) {
+    ElMessage.error('获取产品分类失败')
+  } finally {
+    categoryLoading.value = false
+  }
+}
+
+// 打开添加分类对话框
+const openCategoryDialog = () => {
+  categoryForm.value = { name: '' }
+  categoryDialogVisible.value = true
+}
+
+// 添加产品分类
+const handleAddCategory = async () => {
+  if (!categoryForm.value.name.trim()) {
+    ElMessage.warning('请输入分类名称')
+    return
+  }
+
+  try {
+    await productApi.createCategory(categoryForm.value)
+    ElMessage.success('添加成功')
+    categoryDialogVisible.value = false
+    fetchProductCategories()
+  } catch (error) {
+    ElMessage.error('添加失败')
+  }
+}
+
+// 删除产品分类
+const handleDeleteCategory = async (id, name) => {
+  try {
+    await ElMessageBox.confirm(`确定要删除分类"${name}"吗？`, '提示', {
+      type: 'warning'
+    })
+    await productApi.deleteCategory(id)
+    ElMessage.success('删除成功')
+    fetchProductCategories()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+    }
+  }
+}
+
 onMounted(() => {
   fetchBackups()
   fetchBackupConfig()
   fetchImageStats()
+  fetchProductCategories()
 })
 </script>
 
@@ -319,6 +378,43 @@ onMounted(() => {
       </el-alert>
     </el-card>
 
+    <!-- 产品分类管理 -->
+    <el-card shadow="never" class="setting-card">
+      <template #header>
+        <div class="card-header">
+          <el-icon><Collection /></el-icon>
+          <span>产品分类管理</span>
+        </div>
+      </template>
+
+      <div style="margin-bottom: 20px">
+        <el-button type="primary" @click="openCategoryDialog">
+          <el-icon><Plus /></el-icon> 添加分类
+        </el-button>
+        <el-button @click="fetchProductCategories">
+          <el-icon><Refresh /></el-icon> 刷新列表
+        </el-button>
+      </div>
+
+      <el-table :data="productCategories" v-loading="categoryLoading">
+        <el-table-column prop="name" label="分类名称" />
+        <el-table-column prop="created_at" label="创建时间" width="180">
+          <template #default="{ row }">
+            {{ formatDate(row.created_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="100">
+          <template #default="{ row }">
+            <el-button text type="danger" size="small" @click="handleDeleteCategory(row.id, row.name)">
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-empty v-if="!categoryLoading && productCategories.length === 0" description="暂无分类" />
+    </el-card>
+
     <!-- 关于 -->
     <el-card shadow="never" class="setting-card">
       <template #header>
@@ -334,6 +430,19 @@ onMounted(() => {
         <el-descriptions-item label="用途">个人家用财务记账管理</el-descriptions-item>
       </el-descriptions>
     </el-card>
+
+    <!-- 添加产品分类对话框 -->
+    <el-dialog v-model="categoryDialogVisible" title="添加产品分类" width="400px">
+      <el-form :model="categoryForm" label-width="80px">
+        <el-form-item label="分类名称">
+          <el-input v-model="categoryForm.name" placeholder="请输入分类名称" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="categoryDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleAddCategory">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

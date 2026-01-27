@@ -41,7 +41,7 @@ if not exist "node_modules" (
         exit /b 1
     )
 )
-start "Financial System - Backend" cmd /k "node src/app.js"
+start "Financial System - Backend" cmd /k "cd /d "%~dp0server" && node src/app.js"
 cd ..
 
 :: Wait for server to start (3 seconds)
@@ -61,7 +61,7 @@ if not exist "node_modules" (
         exit /b 1
     )
 )
-start "Financial System - Frontend" cmd /k "npm run dev"
+start "Financial System - Frontend" cmd /k "cd /d "%~dp0client" && npm run dev"
 cd ..
 
 :: Wait for frontend to start (5 seconds)

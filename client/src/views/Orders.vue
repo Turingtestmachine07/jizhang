@@ -426,7 +426,7 @@ const resetFilters = () => {
 }
 
 const formatMoney = (value) => {
-  return Number(value || 0).toFixed(2)
+  return Number(value || 0).toFixed(5)
 }
 
 const getStatusType = (status) => {
@@ -627,7 +627,7 @@ onMounted(() => {
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="已付金额">
-              <el-input-number v-model="form.paid_amount" :min="0" :precision="2" style="width: 100%" />
+              <el-input-number v-model="form.paid_amount" :min="0" :precision="5" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -666,7 +666,7 @@ onMounted(() => {
               </el-option>
             </el-select>
             <el-input-number v-model="item.quantity" :min="1" placeholder="数量" style="width: 100px" />
-            <el-input-number v-model="item.unit_price" :min="0" :precision="2" placeholder="单价" style="width: 120px" />
+            <el-input-number v-model="item.unit_price" :min="0" :precision="5" placeholder="单价" style="width: 120px" />
             <span class="item-subtotal">
               小计: ¥{{ formatMoney(item.quantity * item.unit_price) }}
             </span>
@@ -735,7 +735,7 @@ onMounted(() => {
           <el-input v-model="quickProductForm.unit" placeholder="如: 个、件、箱" />
         </el-form-item>
         <el-form-item label="单价">
-          <el-input-number v-model="quickProductForm.unit_price" :min="0" :precision="2" style="width: 100%" />
+          <el-input-number v-model="quickProductForm.unit_price" :min="0" :precision="5" style="width: 100%" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -801,7 +801,7 @@ onMounted(() => {
     <el-dialog v-model="paymentVisible" title="收款" width="400px">
       <el-form label-width="80px">
         <el-form-item label="收款金额">
-          <el-input-number v-model="paymentAmount" :min="0" :precision="2" style="width: 100%" />
+          <el-input-number v-model="paymentAmount" :min="0" :precision="5" style="width: 100%" />
         </el-form-item>
       </el-form>
       <template #footer>

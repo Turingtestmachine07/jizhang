@@ -131,7 +131,7 @@ const handleExport = async () => {
 }
 
 const formatMoney = (value) => {
-  return Number(value || 0).toFixed(2)
+  return Number(value || 0).toFixed(5)
 }
 
 // 计算总计
@@ -205,10 +205,10 @@ onMounted(() => {
               <el-statistic title="总订单数" :value="salesTotals().order_count" />
             </el-col>
             <el-col :span="8">
-              <el-statistic title="总销售额" :value="salesTotals().total_amount" prefix="¥" :precision="2" />
+              <el-statistic title="总销售额" :value="salesTotals().total_amount" prefix="¥" :precision="5" />
             </el-col>
             <el-col :span="8">
-              <el-statistic title="总收款额" :value="salesTotals().paid_amount" prefix="¥" :precision="2" />
+              <el-statistic title="总收款额" :value="salesTotals().paid_amount" prefix="¥" :precision="5" />
             </el-col>
           </el-row>
           <el-table :data="salesData" v-loading="loading" show-summary>
@@ -239,7 +239,7 @@ onMounted(() => {
               <el-statistic title="总销量" :value="productsTotals().total_quantity" />
             </el-col>
             <el-col :span="8">
-              <el-statistic title="总销售额" :value="productsTotals().total_amount" prefix="¥" :precision="2" />
+              <el-statistic title="总销售额" :value="productsTotals().total_amount" prefix="¥" :precision="5" />
             </el-col>
             <el-col :span="8">
               <el-statistic title="涉及订单数" :value="productsTotals().order_count" />
@@ -277,10 +277,10 @@ onMounted(() => {
               <el-statistic title="总订单数" :value="customersTotals().order_count" />
             </el-col>
             <el-col :span="8">
-              <el-statistic title="总消费额" :value="customersTotals().total_amount" prefix="¥" :precision="2" />
+              <el-statistic title="总消费额" :value="customersTotals().total_amount" prefix="¥" :precision="5" />
             </el-col>
             <el-col :span="8">
-              <el-statistic title="总欠款额" :value="customersTotals().unpaid_amount" prefix="¥" :precision="2" value-style="color: #f56c6c" />
+              <el-statistic title="总欠款额" :value="customersTotals().unpaid_amount" prefix="¥" :precision="5" value-style="color: #f56c6c" />
             </el-col>
           </el-row>
           <el-table :data="customersData" v-loading="loading">

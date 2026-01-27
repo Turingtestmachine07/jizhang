@@ -72,7 +72,7 @@ const fetchProducts = async () => {
 const fetchCategories = async () => {
   try {
     const { data } = await productApi.getCategories()
-    categories.value = data || []
+    categories.value = data.map(c => c.name) || []
   } catch (error) {
     console.error('获取分类失败:', error)
   }
@@ -358,7 +358,7 @@ const handleSubmit = async () => {
 }
 
 const formatMoney = (value) => {
-  return Number(value || 0).toFixed(2)
+  return Number(value || 0).toFixed(5)
 }
 
 onMounted(() => {
@@ -517,7 +517,7 @@ onMounted(() => {
           <el-input v-model="form.unit" placeholder="如: 个、件、箱" />
         </el-form-item>
         <el-form-item label="单价">
-          <el-input-number v-model="form.unit_price" :min="0" :precision="2" />
+          <el-input-number v-model="form.unit_price" :min="0" :precision="5" />
         </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="3" placeholder="产品描述" />
@@ -550,10 +550,10 @@ onMounted(() => {
             <el-statistic title="订单数" :value="productStats.order_count" />
           </el-col>
           <el-col :span="6">
-            <el-statistic title="销售总额" :value="productStats.total_amount" prefix="¥" :precision="2" />
+            <el-statistic title="销售总额" :value="productStats.total_amount" prefix="¥" :precision="5" />
           </el-col>
           <el-col :span="6">
-            <el-statistic title="平均单价" :value="productStats.avg_price" prefix="¥" :precision="2" />
+            <el-statistic title="平均单价" :value="productStats.avg_price" prefix="¥" :precision="5" />
           </el-col>
         </el-row>
 

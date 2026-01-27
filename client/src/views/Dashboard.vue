@@ -27,7 +27,7 @@ const fetchDashboard = async () => {
 }
 
 const formatMoney = (value) => {
-  return Number(value || 0).toFixed(2)
+  return Number(value || 0).toFixed(5)
 }
 
 const getStatusType = (status) => {

@@ -20,7 +20,7 @@ const initDB = () => {
       category TEXT,
       spec TEXT,
       unit TEXT,
-      unit_price DECIMAL(10,2) DEFAULT 0,
+      unit_price DECIMAL(10,5) DEFAULT 0,
       photo TEXT,
       description TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -46,8 +46,8 @@ const initDB = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_no TEXT NOT NULL UNIQUE,
       customer_id INTEGER,
-      total_amount DECIMAL(10,2) DEFAULT 0,
-      paid_amount DECIMAL(10,2) DEFAULT 0,
+      total_amount DECIMAL(10,5) DEFAULT 0,
+      paid_amount DECIMAL(10,5) DEFAULT 0,
       status TEXT DEFAULT '待付款',
       order_date DATE DEFAULT CURRENT_DATE,
       note TEXT,
@@ -63,8 +63,8 @@ const initDB = () => {
       order_id INTEGER NOT NULL,
       product_id INTEGER,
       quantity INTEGER DEFAULT 1,
-      unit_price DECIMAL(10,2) DEFAULT 0,
-      subtotal DECIMAL(10,2) DEFAULT 0,
+      unit_price DECIMAL(10,5) DEFAULT 0,
+      subtotal DECIMAL(10,5) DEFAULT 0,
       note TEXT,
       FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
       FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
@@ -90,13 +90,22 @@ const initDB = () => {
     )
   `);
 
+  // 产品分类表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS product_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // 支出表
   db.exec(`
     CREATE TABLE IF NOT EXISTS expenses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       expense_no TEXT NOT NULL UNIQUE,
       category_id INTEGER,
-      amount DECIMAL(10,2) NOT NULL,
+      amount DECIMAL(10,5) NOT NULL,
       expense_date DATE DEFAULT CURRENT_DATE,
       payee TEXT,
       payment_method TEXT DEFAULT '现金',
@@ -120,6 +129,16 @@ const initDB = () => {
     const insertCategory = db.prepare('INSERT OR IGNORE INTO expense_categories (name) VALUES (?)');
     for (const cat of defaultCategories) {
       insertCategory.run(cat);
+    }
+  }
+
+  // 初始化默认产品分类
+  const existingProductCategories = db.prepare('SELECT COUNT(*) as count FROM product_categories').get();
+  if (existingProductCategories.count === 0) {
+    const defaultProductCategories = ['电子产品', '食品饮料', '服装鞋帽', '日用百货', '办公用品', '其他'];
+    const insertProductCategory = db.prepare('INSERT OR IGNORE INTO product_categories (name) VALUES (?)');
+    for (const cat of defaultProductCategories) {
+      insertProductCategory.run(cat);
     }
   }
 

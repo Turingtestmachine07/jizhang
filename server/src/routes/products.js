@@ -107,9 +107,31 @@ router.get('/', (req, res) => {
 router.get('/categories', (req, res) => {
   try {
     const categories = db.prepare(
-      "SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != '' ORDER BY category"
+      'SELECT * FROM product_categories ORDER BY created_at DESC'
     ).all();
-    res.json(categories.map(c => c.category));
+    res.json(categories);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 创建产品分类
+router.post('/categories', (req, res) => {
+  try {
+    const { name } = req.body;
+    const result = db.prepare('INSERT INTO product_categories (name) VALUES (?)').run(name);
+    const category = db.prepare('SELECT * FROM product_categories WHERE id = ?').get(result.lastInsertRowid);
+    res.status(201).json(category);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 删除产品分类
+router.delete('/categories/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM product_categories WHERE id = ?').run(req.params.id);
+    res.json({ message: '删除成功' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
