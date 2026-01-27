@@ -32,11 +32,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 静态文件服务 - 图片访问
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// 前端静态文件服务
-const clientDistPath = process.env.CLIENT_DIST_PATH || path.join(__dirname, '../../client/dist');
-console.log('Serving static files from:', clientDistPath);
-app.use(express.static(clientDistPath));
-
 // API 路由
 app.use('/api/products', productRoutes);
 app.use('/api/customers', customerRoutes);
@@ -82,15 +77,29 @@ app.get('/api/config/external-url', (req, res) => {
   });
 });
 
-// SPA 路由支持 - 所有非 API 请求返回 index.html
-app.get('*', (req, res, next) => {
-  // 跳过 API 路由
-  if (req.path.startsWith('/api/')) {
+// SPA 路由支持 - 所有非 API、非静态文件的请求返回 index.html
+app.use((req, res, next) => {
+  // 1. 跳过 API 路由（/api/ 开头）
+  // 2. 跳过静态文件路由（/uploads/ 开头，避免图片请求被拦截）
+  if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
     return next();
   }
-  // 返回 index.html
+
+  // 3. 只处理 GET 请求（SPA 前端路由都是 GET 请求，过滤其他无用请求）
+  if (req.method !== 'GET') {
+    return next();
+  }
+
+  // 4. 返回 index.html
   const clientDistPath = process.env.CLIENT_DIST_PATH || path.join(__dirname, '../../client/dist');
-  res.sendFile(path.join(clientDistPath, 'index.html'));
+  const indexHtmlPath = path.join(clientDistPath, 'index.html');
+
+  // 5. 安全发送文件，错误传递给统一错误处理中间件
+  res.sendFile(indexHtmlPath, (err) => {
+    if (err) {
+      next(err);
+    }
+  });
 });
 
 // 404 处理（只处理 API 路由）
@@ -99,16 +108,9 @@ app.use(notFoundHandler);
 // 统一错误处理
 app.use(errorHandler);
 
-// 如果不是被导入（直接运行），则启动服务器
-if (import.meta.url === `file://${process.argv[1]}`) {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`服务器运行在 http://localhost:${PORT}`);
-    console.log(`内网访问地址: http://<本机IP>:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`服务器运行在 http://localhost:${PORT}`);
 
-    // 检查并执行每日备份
-    backupScheduler.checkAndBackup();
-  });
-}
-
-// 导出 app 供 Electron 使用
-export default app;
+  // 检查并执行每日备份
+  backupScheduler.checkAndBackup();
+});

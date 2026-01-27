@@ -15,7 +15,7 @@ export const config = {
 
   // 文件上传配置
   uploadDir: process.env.UPLOAD_DIR || './uploads',
-  maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024, // 5MB
+  maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 20 * 1024 * 1024, // 20MB
 
   // 日志配置
   logLevel: process.env.LOG_LEVEL || 'info',
